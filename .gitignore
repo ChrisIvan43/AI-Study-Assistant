@@ -19,3 +19,6 @@ backend/uploads/*
 .venv/
 venv/
 ENV/
+.neon
+node_modules/
+.env.local

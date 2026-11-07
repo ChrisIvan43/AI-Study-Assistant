@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from logging.config import fileConfig
 
 from dotenv import load_dotenv
@@ -7,8 +8,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
-load_dotenv()
-
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env.local", override=False)
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -18,10 +19,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option(
-    "sqlalchemy.url",
-    os.getenv("DATABASE_URL", "sqlite:///./study_assistant.db"),
-)
+database_url = os.getenv("DATABASE_URL", "sqlite:///./study_assistant.db")
+
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace(
+        "postgresql://",
+        "postgresql+psycopg2://",
+        1,
+    )
+
+config.set_main_option("sqlalchemy.url", database_url)
 
 from models import Base  # noqa: E402
 
