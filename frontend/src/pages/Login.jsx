@@ -67,8 +67,8 @@ export default function Login() {
             <button type="submit" disabled={loading} className="btn-primary"
               style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem', marginTop: '0.25rem' }}>
               {loading
-                ? <span style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:'0.5rem' }}><span className="spinner-sm"/>Signing inâ€¦</span>
-                : 'â†’ Sign In'}
+                ? <span style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:'0.5rem' }}><span className="spinner-sm"/>Signing in…</span>
+                : '→ Sign In'}
             </button>
           </form>
 
