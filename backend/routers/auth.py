@@ -32,6 +32,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         name=user_data.name,
         email=user_data.email,
         password_hash=hash_password(user_data.password),
+        role="student",
     )
     db.add(new_user)
     db.commit()
@@ -50,6 +51,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
             id=new_user.id,
             name=new_user.name,
             email=new_user.email,
+            role=new_user.role,
             created_at=new_user.created_at,
         ),
     )
@@ -77,6 +79,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
             id=user.id,
             name=user.name,
             email=user.email,
+            role=user.role,
             created_at=user.created_at,
         ),
     )
@@ -98,5 +101,6 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
         id=current_user.id,
         name=current_user.name,
         email=current_user.email,
+        role=current_user.role,
         created_at=current_user.created_at,
     )

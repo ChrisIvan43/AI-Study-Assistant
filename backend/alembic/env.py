@@ -30,6 +30,12 @@ if database_url.startswith("postgresql://"):
 
 config.set_main_option("sqlalchemy.url", database_url)
 
+
+import sys
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_ROOT))
+
 from models import Base  # noqa: E402
 
 target_metadata = Base.metadata

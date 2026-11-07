@@ -346,36 +346,96 @@ Return ONLY a valid JSON array, no other text."""
 
 def generate_flashcards(document_text: str) -> List[Dict[str, str]]:
     """
-    Generate flashcards from the document text.
-    Returns list of dicts with 'front' and 'back' keys.
+    Generate exactly 10 valid flashcards from the document text.
+    Retries once if the AI returns fewer than 10 valid cards.
     """
+    if not document_text or not document_text.strip():
+        raise ValueError("Cannot generate flashcards because the document is empty.")
+
     text = _truncate_text(document_text)
 
-    prompt = f"""Based on the following study material, create 5-10 flashcards for studying.
-Each flashcard should have a concept/question on the front and the answer/definition on the back.
+    system_prompt = (
+        "You are an expert flashcard creator. "
+        "Create accurate, distinct flashcards using only the supplied study material. "
+        "Always respond with valid JSON."
+    )
 
-Respond ONLY with a JSON array of objects. Each object must have:
-- "front": The question or concept (short, concise)
-- "back": The answer or definition (clear and complete)
+    def build_prompt(retry: bool = False) -> str:
+        retry_instruction = (
+            " Your previous response did not contain 10 valid flashcards. "
+            "Correct this and return exactly 10 complete, distinct cards."
+            if retry else ""
+        )
+
+        return f"""Based ONLY on the following study material, create EXACTLY 10 distinct flashcards.
+Each flashcard must test an important fact, definition, process, principle, or concept from the document.
+Do not invent information or use outside knowledge.
+Keep each question concise and each answer clear and accurate.
+Do not repeat questions or concepts.{retry_instruction}
+
+Respond ONLY with a valid JSON array containing exactly 10 objects.
+Every object must contain:
+- "front": A concise question or concept.
+- "back": A clear and complete answer based on the document.
 
 Study Material:
 {text}
 
-Return ONLY a valid JSON array, no other text."""
+Return ONLY the JSON array. Do not include markdown or explanations."""
 
-    system_prompt = "You are an expert flashcard creator. You create effective study flashcards. Always respond with valid JSON."
+    def normalize_cards(response: str) -> List[Dict[str, str]]:
+        parsed = _parse_json_from_response(response)
 
-    response = _call_ai(prompt, system_prompt)
-    
-    parsed = _parse_json_from_response(response)
-    if parsed and isinstance(parsed, list):
-        return parsed[:20]  # Limit to 20 flashcards
+        if not isinstance(parsed, list):
+            return []
 
-    # Fallback
-    return [{"front": "What is the main topic of this document?", "back": "Refer to the document content for the answer."}]
+        cards = []
+        seen_fronts = set()
 
+        for item in parsed:
+            if not isinstance(item, dict):
+                continue
 
-# ─── Chat with Document ────────────────────────────────────────
+            front = item.get("front") or item.get("question") or item.get("concept") or ""
+            back = item.get("back") or item.get("answer") or item.get("definition") or ""
+
+            if not isinstance(front, str) or not isinstance(back, str):
+                continue
+
+            front = front.strip()
+            back = back.strip()
+
+            if not front or not back:
+                continue
+
+            normalized_front = " ".join(front.lower().split())
+            if normalized_front in seen_fronts:
+                continue
+
+            seen_fronts.add(normalized_front)
+            cards.append({"front": front, "back": back})
+
+            if len(cards) == 10:
+                break
+
+        return cards
+
+    for attempt in range(2):
+        response = _call_ai(
+            build_prompt(retry=(attempt == 1)),
+            system_prompt
+        )
+
+        cards = normalize_cards(response)
+
+        if len(cards) == 10:
+            return cards
+
+    raise RuntimeError(
+        "The AI could not generate exactly 10 valid flashcards from this document. "
+        "Please try generating the flashcards again."
+    )
+
 
 def chat_with_document(question: str, document_text: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
     """

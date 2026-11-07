@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, s
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Document, Collection
+from models import User, Document, Collection, Flashcard
 from schemas import DocumentResponse, DocumentListResponse, DocumentCollectionUpdateRequest
 from utils.auth import get_current_user
 from utils.file_processor import allowed_file, validate_file_size, generate_unique_filename, extract_text
@@ -83,7 +83,68 @@ async def upload_document(
     db.commit()
     db.refresh(db_document)
 
-    return db_document
+    # Generate and save exactly 10 flashcards after the document is safely stored.
+    flashcards_generated = False
+    flashcards_count = 0
+    flashcards_error = None
+
+    try:
+        from services.ai_service import generate_flashcards
+
+        cards_data = generate_flashcards(document_text)
+
+        if len(cards_data) != 10:
+            raise ValueError("AI did not return exactly 10 flashcards.")
+
+        db_cards = []
+
+        for card_data in cards_data:
+            front_text = str(
+                card_data.get("front")
+                or card_data.get("question")
+                or card_data.get("concept")
+                or ""
+            ).strip()
+
+            back_text = str(
+                card_data.get("back")
+                or card_data.get("answer")
+                or card_data.get("definition")
+                or ""
+            ).strip()
+
+            if not front_text or not back_text:
+                raise ValueError("A generated flashcard is missing its question or answer.")
+
+            db_cards.append(
+                Flashcard(
+                    document_id=db_document.id,
+                    front=front_text,
+                    back=back_text,
+                )
+            )
+
+        db.add_all(db_cards)
+        db.commit()
+
+        flashcards_generated = True
+        flashcards_count = len(db_cards)
+
+    except Exception:
+        # Keep the already-committed document if flashcard generation fails.
+        db.rollback()
+        flashcards_error = (
+            "Flashcard generation failed. You can retry from the Flashcards page."
+        )
+
+    response = DocumentResponse.model_validate(db_document)
+    return response.model_copy(
+        update={
+            "flashcards_generated": flashcards_generated,
+            "flashcards_count": flashcards_count,
+            "flashcards_error": flashcards_error,
+        }
+    )
 
 
 @router.get("", response_model=DocumentListResponse)

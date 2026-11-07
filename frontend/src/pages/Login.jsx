@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
@@ -18,7 +18,7 @@ export default function Login() {
       const res = await api.post('/login', form)
       login(res.data.access_token, res.data.user)
       toast.success('Welcome back, ' + res.data.user.name + '!')
-      navigate('/dashboard')
+      navigate(res.data.user?.role === 'admin' ? '/admin' : '/dashboard')
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Invalid email or password')
     } finally { setLoading(false) }
@@ -41,7 +41,7 @@ export default function Login() {
               style={{ width: '66px', height: '66px', objectFit: 'contain' }}
               onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block' }}
             />
-            <span style={{ display: 'none', fontSize: '2.2rem' }}>🧠</span>
+            <span style={{ display: 'none', fontSize: '2.2rem' }}>ðŸ§ </span>
           </div>
           <h1 style={{
             fontSize: '1.65rem', fontWeight: 800, marginBottom: '0.25rem',
@@ -62,13 +62,13 @@ export default function Login() {
             <div>
               <label className="label">Password</label>
               <input type="password" name="password" value={form.password} onChange={handleChange}
-                placeholder="••••••••" required className="input-field" />
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required className="input-field" />
             </div>
             <button type="submit" disabled={loading} className="btn-primary"
               style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem', marginTop: '0.25rem' }}>
               {loading
-                ? <span style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:'0.5rem' }}><span className="spinner-sm"/>Signing in…</span>
-                : '→ Sign In'}
+                ? <span style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:'0.5rem' }}><span className="spinner-sm"/>Signing inâ€¦</span>
+                : 'â†’ Sign In'}
             </button>
           </form>
 

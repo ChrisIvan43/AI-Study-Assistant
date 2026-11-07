@@ -47,6 +47,17 @@ export default function Flashcards() {
     try {
       const r = await api.get(`/documents/${docId}`)
       setDocument(r.data)
+
+      try {
+        const cardsResponse = await api.get(/flashcards/)
+        const savedCards = Array.isArray(cardsResponse.data)
+          ? cardsResponse.data
+          : cardsResponse.data.flashcards || []
+
+        setFlashcards(savedCards)
+      } catch {
+        setFlashcards([])
+      }
     } catch {
       toast.error('Failed to load document')
     } finally {

@@ -47,52 +47,131 @@ def create_flashcards(
             detail="Document has no extractable text",
         )
 
-    # Check if flashcards already exist
-    if getattr(request, 'regenerate', False):
-        db.query(Flashcard).filter(Flashcard.document_id == request.document_id).delete()
-        db.commit()
-    else:
-        existing = db.query(Flashcard).filter(Flashcard.document_id == request.document_id).count()
-        if existing > 0:
-            # Return existing flashcards
-            flashcards = db.query(Flashcard).filter(
-                Flashcard.document_id == request.document_id
-            ).all()
-            return FlashcardListResponse(flashcards=flashcards, total=len(flashcards))
+    # Load existing cards without deleting them.
+    existing_cards = db.query(Flashcard).filter(
+        Flashcard.document_id == request.document_id
+    ).order_by(Flashcard.id.asc()).all()
 
-    # Generate flashcards via AI
+    if not getattr(request, "regenerate", False):
+        if len(existing_cards) == 10:
+            return FlashcardListResponse(
+                flashcards=existing_cards,
+                total=10,
+            )
+
+        if len(existing_cards) > 10:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="More than 10 cards already exist. Use Regenerate to create exactly 10.",
+            )
+
+    # Generate and validate before changing any saved cards.
     try:
         cards_data = generate_flashcards(document.document_text)
+
+        if not isinstance(cards_data, list) or len(cards_data) != 10:
+            raise RuntimeError("AI service did not return exactly 10 cards.")
+
+        normalized_cards = []
+
+        for card_data in cards_data:
+            front_text = str(
+                card_data.get("front")
+                or card_data.get("question")
+                or card_data.get("concept")
+                or ""
+            ).strip()
+
+            back_text = str(
+                card_data.get("back")
+                or card_data.get("answer")
+                or card_data.get("definition")
+                or ""
+            ).strip()
+
+            if not front_text or not back_text:
+                raise RuntimeError("AI returned an incomplete flashcard.")
+
+            normalized_cards.append({
+                "front": front_text,
+                "back": back_text,
+            })
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"AI service error: {str(e)}",
         )
 
-    # Save to database
-    db_cards = []
-    for card_data in cards_data:
-        front_text = str(card_data.get("front") or card_data.get("question") or card_data.get("concept") or "")
-        back_text = str(card_data.get("back") or card_data.get("answer") or card_data.get("definition") or "")
-        
-        # Don't save completely blank cards
-        if not front_text.strip() and not back_text.strip():
-            continue
-            
-        card = Flashcard(
-            document_id=request.document_id,
-            front=front_text.strip(),
-            back=back_text.strip(),
+    # Keep existing cards and fill only the missing slots,
+    # unless the user explicitly requested regeneration.
+    if getattr(request, "regenerate", False):
+        cards_to_save = normalized_cards
+    else:
+        existing_fronts = {
+            " ".join(card.front.lower().split())
+            for card in existing_cards
+        }
+
+        additional_cards = []
+
+        for card in normalized_cards:
+            normalized_front = " ".join(card["front"].lower().split())
+
+            if normalized_front in existing_fronts:
+                continue
+
+            existing_fronts.add(normalized_front)
+            additional_cards.append(card)
+
+            if len(existing_cards) + len(additional_cards) == 10:
+                break
+
+        needed = 10 - len(existing_cards)
+
+        if len(additional_cards) < needed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "The AI could not generate enough new, distinct cards "
+                    "to complete the set. Your existing cards were preserved. "
+                    "Try Regenerate to create a fresh set of 10."
+                ),
+            )
+
+        cards_to_save = additional_cards[:needed]
+
+    # Save atomically. Existing cards are deleted only for explicit regeneration.
+    try:
+        if getattr(request, "regenerate", False):
+            db.query(Flashcard).filter(
+                Flashcard.document_id == request.document_id
+            ).delete(synchronize_session=False)
+
+        for card_data in cards_to_save:
+            db.add(Flashcard(
+                document_id=request.document_id,
+                front=card_data["front"],
+                back=card_data["back"],
+            ))
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not save flashcards: {str(e)}",
         )
-        db.add(card)
-        db_cards.append(card)
 
-    db.commit()
-    for card in db_cards:
-        db.refresh(card)
+    saved_cards = db.query(Flashcard).filter(
+        Flashcard.document_id == request.document_id
+    ).order_by(Flashcard.id.asc()).all()
 
-    return FlashcardListResponse(flashcards=db_cards, total=len(db_cards))
-
+    return FlashcardListResponse(
+        flashcards=saved_cards,
+        total=len(saved_cards),
+    )
 
 @router.get("/due", response_model=FlashcardListResponse)
 def get_due_flashcards(

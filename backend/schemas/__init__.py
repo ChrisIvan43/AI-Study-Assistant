@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
+    role: str = "student"
     created_at: datetime
 
     class Config:
@@ -69,6 +70,9 @@ class DocumentResponse(BaseModel):
     file_path: str
     document_text: Optional[str] = None
     created_at: datetime
+    flashcards_generated: Optional[bool] = None
+    flashcards_count: Optional[int] = None
+    flashcards_error: Optional[str] = None
 
     class Config:
         from_attributes = True

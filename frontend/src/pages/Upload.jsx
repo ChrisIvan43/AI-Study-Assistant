@@ -72,7 +72,14 @@ export default function Upload() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      toast.success('Document uploaded!')
+      if (res.data.flashcards_generated === true) {
+        toast.success('Document uploaded and 10 flashcards generated!')
+      } else {
+        toast.error(
+          res.data.flashcards_error ||
+          'Document uploaded, but flashcards could not be generated. You can retry from Flashcards.'
+        )
+      }
       navigate(`/summary?doc=${res.data.id}`)
     } catch (e) {
       toast.error(

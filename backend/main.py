@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ENV = Path(__file__).resolve().parent / ".env"
+
+# Load backend-specific settings first, then use root settings as fallback.
+load_dotenv(BACKEND_ENV, override=False)
 load_dotenv(PROJECT_ROOT / ".env.local", override=False)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +26,7 @@ from routers import (
     ai_chat,
     study_planner,
     progress,
+    admin,
 )
 
 # Database schema is managed by Alembic migrations (see backend/alembic/).
@@ -74,6 +79,7 @@ app.include_router(ai_flashcards.router)
 app.include_router(ai_chat.router)
 app.include_router(study_planner.router)
 app.include_router(progress.router)
+app.include_router(admin.router)
 
 
 # ─── Health Check ──────────────────────────────────────────────
