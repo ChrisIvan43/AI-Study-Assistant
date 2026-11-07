@@ -1,0 +1,21 @@
+# Environment files
+.env
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.db
+
+# Node / frontend build
+frontend/node_modules/
+frontend/dist/
+
+# Uploaded user documents (ephemeral, not part of source)
+backend/uploads/*
+!backend/uploads/.gitkeep
+.venv/
+venv/
+ENV/

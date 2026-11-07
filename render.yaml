@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: ai-study-assistant-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-study-assistant-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AI_PROVIDER
+        value: demo
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-3.5-turbo
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: LOCAL_API_URL
+        sync: false
+      - key: LOCAL_MODEL
+        sync: false
+
+databases:
+  - name: ai-study-assistant-db
+    plan: free
+    databaseName: study_assistant
+    user: study_assistant
