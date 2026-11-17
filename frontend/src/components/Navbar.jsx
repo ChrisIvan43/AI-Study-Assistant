@@ -15,6 +15,8 @@ import {
   LogOut,
   GraduationCap,
   PanelLeftClose,
+
+  Settings,
 } from 'lucide-react'
 
 const NAV_LINKS = [
@@ -23,6 +25,7 @@ const NAV_LINKS = [
   { path: '/collections', label: 'Collections', icon: FolderOpen },
   { path: '/planner', label: 'Planner', icon: CalendarClock },
   { path: '/progress', label: 'Progress', icon: TrendingUp },
+  { path: '/settings', label: 'Account Settings', icon: Settings },
 ]
 
 export default function Navbar() {

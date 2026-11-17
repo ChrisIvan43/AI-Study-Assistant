@@ -1,0 +1,65 @@
+﻿const browserGlobals = [
+  "window",
+  "document",
+  "localStorage",
+  "sessionStorage",
+  "navigator",
+  "location",
+  "history",
+  "console",
+  "fetch",
+  "URL",
+  "URLSearchParams",
+  "FormData",
+  "Blob",
+  "File",
+  "FileReader",
+  "Headers",
+  "Request",
+  "Response",
+  "WebSocket",
+  "MutationObserver",
+  "IntersectionObserver",
+  "HTMLElement",
+  "Element",
+  "Node",
+  "Event",
+  "CustomEvent",
+  "AbortController",
+  "AbortSignal",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "alert",
+  "confirm",
+  "prompt",
+  "atob",
+  "btoa",
+  "crypto",
+  "performance",
+];
+
+export default [
+  {
+    files: ["src/**/*.{js,jsx}"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: Object.fromEntries(
+        browserGlobals.map((name) => [name, "readonly"])
+      ),
+    },
+    rules: {
+      "no-undef": "error",
+      "no-unreachable": "error",
+    },
+  },
+];

@@ -21,8 +21,24 @@ export default function Register() {
     if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return }
     setLoading(true)
     try {
-      await api.post('/register', { name: form.name, email: form.email, password: form.password })
-      toast.success('Account created! Please log in.')
+      const response = await api.post('/register', {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+      })
+
+      if (response.data.verification_email_sent === true) {
+        toast.success(
+          response.data.message ||
+          'Account created. Check your email to verify your address.'
+        )
+      } else {
+        toast(
+          response.data.message ||
+          'Account created, but the verification email could not be sent. Sign in and resend it from Account Settings.'
+        )
+      }
+
       navigate('/login')
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Registration failed')

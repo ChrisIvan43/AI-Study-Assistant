@@ -27,6 +27,7 @@ from routers import (
     study_planner,
     progress,
     admin,
+    scheduler,
 )
 
 # Database schema is managed by Alembic migrations (see backend/alembic/).
@@ -80,6 +81,7 @@ app.include_router(ai_chat.router)
 app.include_router(study_planner.router)
 app.include_router(progress.router)
 app.include_router(admin.router)
+app.include_router(scheduler.router)
 
 
 # ─── Health Check ──────────────────────────────────────────────

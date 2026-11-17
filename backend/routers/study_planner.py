@@ -5,10 +5,12 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, StudyPlan, StudySession, Collection, Document, Flashcard, Quiz, QuizQuestion
+from models import User, StudyPlan, StudySession, ScheduledStudySession, Collection, Document, Flashcard, Quiz, QuizQuestion
 from schemas import (
     StudyPlanRequest, StudyPlanResponse, StudyPlanListResponse, StudyPlanUpdateRequest,
     StudySessionRequest, StudySessionResponse, StudySessionListResponse,
+    ScheduledStudySessionCreate, ScheduledStudySessionResponse,
+    ScheduledStudySessionListResponse,
     RecommendationsResponse, WeakTopicItem, FocusQuizRequest, QuizResponse,
 )
 from utils.auth import get_current_user
@@ -305,3 +307,100 @@ def log_study_session(
     db.commit()
     db.refresh(session)
     return session
+
+
+@router.post(
+    "/scheduled-sessions",
+    response_model=ScheduledStudySessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_scheduled_study_session(
+    request: ScheduledStudySessionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Schedule a study session belonging to the authenticated user's plan."""
+    plan = db.query(StudyPlan).filter(
+        StudyPlan.id == request.plan_id,
+        StudyPlan.user_id == current_user.id,
+    ).first()
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="Study plan not found")
+
+    if request.notify_email and not current_user.email_verified_at:
+        raise HTTPException(
+            status_code=400,
+            detail="Verify your Gmail address before enabling session email notifications.",
+        )
+
+    session = ScheduledStudySession(
+        plan_id=plan.id,
+        topic=request.topic,
+        start_at=request.start_at.astimezone(timezone.utc),
+        end_at=request.end_at.astimezone(timezone.utc),
+        notify_email=request.notify_email,
+        status="scheduled",
+        notification_status="pending" if request.notify_email else "disabled",
+    )
+
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get(
+    "/scheduled-sessions",
+    response_model=ScheduledStudySessionListResponse,
+)
+def get_scheduled_study_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List scheduled sessions belonging to the authenticated user."""
+    sessions = (
+        db.query(ScheduledStudySession)
+        .join(StudyPlan, ScheduledStudySession.plan_id == StudyPlan.id)
+        .filter(StudyPlan.user_id == current_user.id)
+        .order_by(ScheduledStudySession.start_at.asc())
+        .all()
+    )
+
+    return {"sessions": sessions, "total": len(sessions)}
+
+
+@router.delete("/scheduled-sessions/{session_id}")
+def cancel_scheduled_study_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cancel one of the authenticated user's scheduled sessions."""
+    session = (
+        db.query(ScheduledStudySession)
+        .join(StudyPlan, ScheduledStudySession.plan_id == StudyPlan.id)
+        .filter(
+            ScheduledStudySession.id == session_id,
+            StudyPlan.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Scheduled study session not found",
+        )
+
+    if session.status != "scheduled":
+        raise HTTPException(
+            status_code=409,
+            detail="Only scheduled sessions can be cancelled.",
+        )
+
+    session.status = "cancelled"
+    session.notification_status = "disabled"
+    db.commit()
+
+    return {"status": "cancelled", "session_id": session.id}

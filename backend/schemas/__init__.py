@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field
+import re
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
 
@@ -16,12 +17,74 @@ class UserLogin(BaseModel):
     password: str = Field(..., max_length=128)
 
 
+
+class EmailChangeRequest(BaseModel):
+    new_email: str = Field(..., min_length=6, max_length=255)
+
+    @field_validator("new_email")
+    @classmethod
+    def validate_gmail_address(cls, value: str) -> str:
+        normalized = value.strip().lower()
+
+        if normalized.count("@") != 1:
+            raise ValueError("Enter a valid Gmail address.")
+
+        local, domain = normalized.rsplit("@", 1)
+
+        if (
+            domain not in {"gmail.com", "googlemail.com"}
+            or not re.fullmatch(r"[a-z0-9][a-z0-9.+-]*", local)
+            or ".." in local
+            or len(local) > 64
+        ):
+            raise ValueError("Enter a valid Gmail address.")
+
+        return normalized
+class EmailChangeVerifyRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=256)
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("A verification token is required.")
+        return normalized
+
+
+class ProfileNameUpdateRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 2:
+            raise ValueError("Name must contain at least 2 characters.")
+        return normalized
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=72)
+    confirm_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password", "confirm_password")
+    @classmethod
+    def validate_bcrypt_length(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes.")
+        return value
+
+
 class UserResponse(BaseModel):
     id: int
     name: str
     email: str
     role: str = "student"
     created_at: datetime
+    email_verified_at: Optional[datetime] = None
+    pending_email: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -31,6 +94,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    verification_email_sent: Optional[bool] = None
+    message: Optional[str] = None
 
 
 # ─── Collection Schemas ─────────────────────────────────────────
@@ -282,6 +347,58 @@ class StudySessionResponse(BaseModel):
 
 class StudySessionListResponse(BaseModel):
     sessions: List[StudySessionResponse]
+    total: int
+
+
+class ScheduledStudySessionCreate(BaseModel):
+    plan_id: int = Field(..., gt=0)
+    topic: str = Field(..., min_length=1, max_length=255)
+    start_at: datetime
+    end_at: datetime
+    notify_email: bool = True
+
+    @field_validator("topic")
+    @classmethod
+    def validate_topic(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A session topic is required.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_session_times(self):
+        for field_name in ("start_at", "end_at"):
+            value = getattr(self, field_name)
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(
+                    f"{field_name} must include a timezone offset."
+                )
+
+        if self.end_at <= self.start_at:
+            raise ValueError("The session end time must be after its start time.")
+
+        return self
+
+
+class ScheduledStudySessionResponse(BaseModel):
+    id: int
+    plan_id: int
+    topic: str
+    start_at: datetime
+    end_at: datetime
+    notify_email: bool
+    status: str
+    notification_status: str
+    notification_attempts: int
+    notification_sent_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduledStudySessionListResponse(BaseModel):
+    sessions: List[ScheduledStudySessionResponse]
     total: int
 
 

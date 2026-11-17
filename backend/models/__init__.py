@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Index,
     Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Date,
     UniqueConstraint,
 )
@@ -16,6 +17,19 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default="student", server_default="student")
+
+    # Email ownership verification and secure email-change workflow
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    pending_email = Column(String(255), nullable=True)
+    pending_email_token_hash = Column(String(64), nullable=True)
+    pending_email_expires_at = Column(DateTime(timezone=True), nullable=True)
+    email_change_requested_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Initial account email verification (separate from email changes)
+    email_verification_token_hash = Column(String(64), nullable=True)
+    email_verification_expires_at = Column(DateTime(timezone=True), nullable=True)
+    email_verification_requested_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
@@ -155,6 +169,7 @@ class StudyPlan(Base):
     user = relationship("User", back_populates="study_plans")
     collection = relationship("Collection")
     sessions = relationship("StudySession", back_populates="plan", cascade="all, delete-orphan")
+    scheduled_sessions = relationship("ScheduledStudySession", back_populates="plan", cascade="all, delete-orphan")
 
 
 class StudySession(Base):
@@ -170,3 +185,40 @@ class StudySession(Base):
 
     plan = relationship("StudyPlan", back_populates="sessions")
 
+
+
+class ScheduledStudySession(Base):
+    __tablename__ = "scheduled_study_sessions"
+    __table_args__ = (
+        Index(
+            "ix_scheduled_study_sessions_due",
+            "notification_status",
+            "end_at",
+        ),
+        Index("ix_scheduled_study_sessions_plan_id", "plan_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(
+        Integer,
+        ForeignKey("study_plans.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    topic = Column(String(255), nullable=False)
+    start_at = Column(DateTime(timezone=True), nullable=False)
+    end_at = Column(DateTime(timezone=True), nullable=False)
+    notify_email = Column(Boolean, nullable=False, default=True)
+    status = Column(String(20), nullable=False, default="scheduled")
+    notification_status = Column(
+        String(20), nullable=False, default="pending"
+    )
+    notification_attempts = Column(Integer, nullable=False, default=0)
+    notification_claimed_at = Column(DateTime(timezone=True), nullable=True)
+    notification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    notification_last_error = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    plan = relationship("StudyPlan", back_populates="scheduled_sessions")

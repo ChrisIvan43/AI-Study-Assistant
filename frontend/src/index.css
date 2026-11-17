@@ -7519,3 +7519,236 @@ a:hover { color: var(--cyan); }
   }
 }
 
+
+
+/* Scheduled study sessions */
+
+.planner-scheduled-section {
+  margin: 13px 0 8px;
+  padding: 15px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.planner-scheduled-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 13px;
+}
+
+.planner-scheduled-heading h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.planner-scheduled-heading h4 svg {
+  color: var(--blue-light);
+}
+
+.planner-scheduled-heading p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.planner-schedule-trigger {
+  min-height: 34px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--blue-light);
+  background: var(--bg-surface);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.planner-schedule-trigger:hover {
+  border-color: var(--blue);
+  background: rgba(41, 121, 255, 0.08);
+}
+
+.planner-schedule-form {
+  margin: 13px 0;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.planner-schedule-form .planner-field input {
+  color-scheme: dark;
+}
+
+.planner-email-option {
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  background: var(--bg-card);
+  cursor: pointer;
+}
+
+.planner-email-option > input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--blue);
+}
+
+.planner-email-option-icon {
+  color: var(--blue-light);
+  display: inline-flex;
+}
+
+.planner-email-option > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planner-email-option strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.planner-email-option small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.planner-schedule-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.planner-scheduled-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.planner-scheduled-row {
+  padding: 12px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.planner-scheduled-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planner-scheduled-info > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.planner-scheduled-info > span {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.planner-notification-status {
+  width: fit-content;
+  font-weight: 700;
+}
+
+.planner-notification-pending {
+  color: #d69e36 !important;
+}
+
+.planner-notification-processing {
+  color: var(--blue-light) !important;
+}
+
+.planner-notification-sent {
+  color: #34d399 !important;
+}
+
+.planner-notification-failed {
+  color: #fb7185 !important;
+}
+
+.planner-notification-disabled {
+  color: var(--text-muted) !important;
+}
+
+.planner-scheduled-cancel {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.planner-scheduled-cancel:hover {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+@media (max-width: 440px) {
+  .planner-scheduled-section {
+    padding: 12px;
+  }
+
+  .planner-scheduled-heading {
+    align-items: flex-start;
+  }
+
+  .planner-schedule-form {
+    padding: 11px;
+  }
+
+  .planner-schedule-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .planner-schedule-form-actions button {
+    width: 100%;
+  }
+
+  .planner-scheduled-row {
+    align-items: flex-start;
+  }
+}

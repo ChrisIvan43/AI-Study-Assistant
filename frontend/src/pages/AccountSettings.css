@@ -1,0 +1,493 @@
+﻿.account-settings-page {
+  min-height: 100%;
+  padding: 42px clamp(18px, 4vw, 54px) 64px;
+  color: var(--text-primary);
+}
+
+.account-settings-content {
+  width: min(100%, 850px);
+  margin: 0 auto;
+}
+
+.account-back-link,
+.verification-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 28px;
+  transition: color 0.2s ease;
+}
+
+.account-back-link:hover,
+.verification-back-link:hover {
+  color: var(--blue-light);
+}
+
+.account-page-header {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  margin-bottom: 30px;
+}
+
+.account-header-icon,
+.account-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #8db8ff;
+  background: rgba(41, 121, 255, 0.13);
+  border: 1px solid rgba(91, 157, 255, 0.2);
+  border-radius: 15px;
+}
+
+.account-header-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.account-eyebrow {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  margin-bottom: 7px;
+}
+
+.account-page-header h1,
+.account-verification-card h1 {
+  color: var(--text-primary);
+  font-size: clamp(1.65rem, 4vw, 2.15rem);
+  letter-spacing: -0.045em;
+  margin: 0;
+}
+
+.account-page-header p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.account-card {
+  padding: clamp(20px, 3vw, 30px);
+  background: linear-gradient(145deg, var(--bg-surface), var(--bg-card));
+  border: 1px solid var(--border-light);
+  border-radius: 19px;
+  box-shadow: 0 14px 40px var(--shadow-color);
+}
+
+.account-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.account-card-icon {
+  width: 43px;
+  height: 43px;
+  border-radius: 12px;
+}
+
+.account-card-heading h2 {
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.account-card-heading p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  margin: 5px 0 0;
+}
+
+.account-email-display {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.account-email-symbol {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(41, 121, 255, 0.1);
+  color: var(--blue-light);
+}
+
+.account-email-details {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.account-email-details span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.account-email-details strong,
+.account-pending-email {
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  overflow-wrap: anywhere;
+}
+
+.account-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 30px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.account-email-form {
+  display: grid;
+  gap: 11px;
+  padding-top: 23px;
+}
+
+.account-email-form label {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.account-email-form input {
+  width: 100%;
+  min-height: 47px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.account-email-form input:focus {
+  border-color: var(--blue-light);
+  box-shadow: 0 0 0 3px rgba(41, 121, 255, 0.13);
+}
+
+.account-email-form input::placeholder {
+  color: var(--text-muted);
+}
+
+.account-field-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  margin: 0 0 5px;
+}
+
+.account-primary-button,
+.account-danger-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  min-height: 43px;
+  padding: 0 17px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+
+.account-primary-button {
+  color: #fff;
+  background: linear-gradient(120deg, #2979ff, #7048e8);
+  box-shadow: 0 6px 17px rgba(41, 121, 255, 0.2);
+}
+
+.account-primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 22px rgba(41, 121, 255, 0.28);
+}
+
+.account-danger-button {
+  color: #fb8585;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.account-danger-button:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.account-primary-button:disabled,
+.account-danger-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.account-pending-panel {
+  margin-top: 23px;
+  padding: 19px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.055);
+  border-radius: 13px;
+}
+
+.account-pending-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #fbbf24;
+  font-size: 0.9rem;
+}
+
+.account-pending-panel p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  margin: 12px 0 6px;
+}
+
+.account-pending-email {
+  display: block;
+  color: var(--text-primary);
+  margin-top: 5px;
+}
+
+.account-pending-panel .account-pending-note {
+  margin-top: 12px;
+}
+
+.account-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.account-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  color: var(--blue-light);
+  background: rgba(41, 121, 255, 0.07);
+  border: 1px solid var(--border-light);
+  border-radius: 13px;
+}
+
+.account-security-note strong {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.account-security-note p {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  margin: 5px 0 0;
+}
+
+.account-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 220px;
+  color: var(--text-secondary);
+}
+
+.account-verification-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 25px;
+}
+
+.account-verification-card {
+  width: min(100%, 490px);
+  padding: clamp(26px, 6vw, 42px);
+  text-align: center;
+  background: linear-gradient(145deg, var(--bg-surface), var(--bg-card));
+  border: 1px solid var(--border-light);
+  border-radius: 22px;
+  box-shadow: 0 20px 65px var(--shadow-color);
+}
+
+.verification-result-icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 23px;
+  color: #8db8ff;
+  background: rgba(41, 121, 255, 0.13);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+}
+
+.verification-result-icon.success {
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.verification-result-icon.error {
+  color: #fb8585;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.account-verification-card h1 {
+  font-size: clamp(1.5rem, 5vw, 1.9rem);
+}
+
+.verification-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin: 14px 0 24px;
+}
+
+.verification-submit {
+  width: 100%;
+  margin-bottom: 17px;
+}
+
+.verification-back-link {
+  justify-content: center;
+  margin: 5px 0 0;
+}
+
+.verification-inline-error {
+  color: #fb8585;
+  font-size: 0.8rem;
+  margin: 0 0 15px;
+}
+
+@media (max-width: 600px) {
+  .account-settings-page {
+    padding: 25px 15px 40px;
+  }
+
+  .account-page-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .account-header-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .account-email-display {
+    flex-wrap: wrap;
+  }
+
+  .account-status-badge {
+    margin-left: 55px;
+  }
+
+  .account-action-row {
+    flex-direction: column;
+  }
+
+  .account-action-row button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-settings-page *,
+  .account-verification-page * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+
+/* Profile name and password settings */
+.account-extra-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 23px;
+}
+
+.account-extra-form label {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.account-extra-form input {
+  width: 100%;
+  min-height: 47px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.account-extra-form input:focus {
+  border-color: var(--blue-light);
+  box-shadow: 0 0 0 3px rgba(41, 121, 255, 0.12);
+}
+
+.account-extra-form input::placeholder {
+  color: var(--text-muted);
+}
+
+.account-extra-form .account-primary-button {
+  justify-self: start;
+  margin-top: 5px;
+}
+
+.account-password-card {
+  margin-top: 20px;
+}
+
+.account-profile-card {
+  margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+  .account-extra-form .account-primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+/* Initial account email verification */
+.account-status-badge.unverified {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.account-initial-verification-panel {
+  margin-bottom: 22px;
+}

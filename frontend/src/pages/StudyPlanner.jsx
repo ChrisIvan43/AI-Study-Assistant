@@ -22,6 +22,10 @@ import {
   AlertCircle,
   Flame,
   RefreshCw,
+  CalendarPlus,
+  Bell,
+  BellOff,
+  Mail,
 } from 'lucide-react'
 
 export default function StudyPlanner() {
@@ -36,6 +40,15 @@ export default function StudyPlanner() {
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [scheduledSessions, setScheduledSessions] = useState([])
+  const [schedulingPlan, setSchedulingPlan] = useState(null)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({
+    topic: '',
+    start_at: '',
+    end_at: '',
+    notify_email: true,
+  })
 
   const [form, setForm] = useState({
     subject: '',
@@ -47,6 +60,7 @@ export default function StudyPlanner() {
   useEffect(() => {
     fetchPlans()
     fetchCollections()
+    fetchScheduledSessions()
   }, [])
 
   const fetchPlans = async () => {
@@ -57,6 +71,18 @@ export default function StudyPlanner() {
       toast.error('Failed to load study plans')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchScheduledSessions = async () => {
+    try {
+      const response = await api.get('/study-plan/scheduled-sessions')
+      setScheduledSessions(response.data.sessions || [])
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        'Failed to load scheduled study sessions'
+      )
     }
   }
 
@@ -171,6 +197,94 @@ export default function StudyPlanner() {
       toast.success('Plan deleted')
     } catch {
       toast.error('Failed to delete plan')
+    }
+  }
+
+  const getLocalDateTimeInput = date => {
+    const localDate = new Date(
+      date.getTime() - date.getTimezoneOffset() * 60000
+    )
+    return localDate.toISOString().slice(0, 16)
+  }
+
+  const openScheduleForm = planId => {
+    if (schedulingPlan === planId) {
+      setSchedulingPlan(null)
+      return
+    }
+
+    const start = new Date(Date.now() + 60 * 60 * 1000)
+    const end = new Date(start.getTime() + 60 * 60 * 1000)
+
+    setScheduleForm({
+      topic: '',
+      start_at: getLocalDateTimeInput(start),
+      end_at: getLocalDateTimeInput(end),
+      notify_email: true,
+    })
+    setSchedulingPlan(planId)
+  }
+
+  const formatManilaDateTime = value =>
+    new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value))
+
+  const createScheduledSession = async event => {
+    event.preventDefault()
+    if (scheduleSaving || !schedulingPlan) return
+
+    if (
+      !scheduleForm.start_at ||
+      !scheduleForm.end_at ||
+      new Date(scheduleForm.end_at) <= new Date(scheduleForm.start_at)
+    ) {
+      toast.error('The end time must be later than the start time.')
+      return
+    }
+
+    setScheduleSaving(true)
+
+    try {
+      await api.post('/study-plan/scheduled-sessions', {
+        plan_id: schedulingPlan,
+        topic: scheduleForm.topic.trim(),
+        start_at: new Date(scheduleForm.start_at).toISOString(),
+        end_at: new Date(scheduleForm.end_at).toISOString(),
+        notify_email: scheduleForm.notify_email,
+      })
+
+      await fetchScheduledSessions()
+      setSchedulingPlan(null)
+      toast.success('Study session scheduled!')
+    } catch (error) {
+      const detail = error.response?.data?.detail
+      toast.error(
+        typeof detail === 'string'
+          ? detail
+          : 'Could not schedule this session. Check your details and email verification.'
+      )
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
+  const cancelScheduledSession = async sessionId => {
+    if (!confirm('Cancel this scheduled study session?')) return
+
+    try {
+      await api.delete(
+        `/study-plan/scheduled-sessions/${sessionId}`
+      )
+      await fetchScheduledSessions()
+      toast.success('Scheduled session cancelled.')
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        'Failed to cancel scheduled session.'
+      )
     }
   }
 
@@ -453,6 +567,9 @@ export default function StudyPlanner() {
                 const recommendation = recommendations[plan.id]
                 const dueFlashcards = recommendation?.due_flashcards || []
                 const weakTopics = recommendation?.weak_topics || []
+                const planScheduledSessions = scheduledSessions.filter(
+                  session => Number(session.plan_id) === Number(plan.id)
+                )
 
                 return (
                   <article key={plan.id} className="planner-plan-card">
@@ -538,6 +655,206 @@ export default function StudyPlanner() {
                           {logging === plan.id ? 'Logging...' : 'Log Today’s Session'}
                         </button>
                       </div>
+
+                      {/* Scheduled study sessions */}
+                      <section className="planner-scheduled-section">
+                        <div className="planner-scheduled-heading">
+                          <div>
+                            <h4>
+                              <CalendarClock size={16} />
+                              Scheduled Sessions
+                            </h4>
+                            <p>
+                              Plan a study session and get an email after it ends.
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="planner-schedule-trigger"
+                            onClick={() => openScheduleForm(plan.id)}
+                          >
+                            {schedulingPlan === plan.id ? (
+                              <X size={15} />
+                            ) : (
+                              <CalendarPlus size={15} />
+                            )}
+                            {schedulingPlan === plan.id ? 'Close' : 'Schedule'}
+                          </button>
+                        </div>
+
+                        {schedulingPlan === plan.id && (
+                          <form
+                            className="planner-schedule-form"
+                            onSubmit={createScheduledSession}
+                          >
+                            <div className="planner-field">
+                              <label htmlFor={`schedule-topic-${plan.id}`}>
+                                Session topic
+                              </label>
+                              <input
+                                id={`schedule-topic-${plan.id}`}
+                                type="text"
+                                maxLength={255}
+                                placeholder="e.g. Review Chapter 1"
+                                value={scheduleForm.topic}
+                                onChange={event =>
+                                  setScheduleForm(current => ({
+                                    ...current,
+                                    topic: event.target.value,
+                                  }))
+                                }
+                                required
+                              />
+                            </div>
+
+                            <div className="planner-form-grid">
+                              <div className="planner-field">
+                                <label htmlFor={`schedule-start-${plan.id}`}>
+                                  Start date and time
+                                </label>
+                                <input
+                                  id={`schedule-start-${plan.id}`}
+                                  type="datetime-local"
+                                  value={scheduleForm.start_at}
+                                  onChange={event =>
+                                    setScheduleForm(current => ({
+                                      ...current,
+                                      start_at: event.target.value,
+                                    }))
+                                  }
+                                  required
+                                />
+                              </div>
+
+                              <div className="planner-field">
+                                <label htmlFor={`schedule-end-${plan.id}`}>
+                                  End date and time
+                                </label>
+                                <input
+                                  id={`schedule-end-${plan.id}`}
+                                  type="datetime-local"
+                                  min={scheduleForm.start_at || undefined}
+                                  value={scheduleForm.end_at}
+                                  onChange={event =>
+                                    setScheduleForm(current => ({
+                                      ...current,
+                                      end_at: event.target.value,
+                                    }))
+                                  }
+                                  required
+                                />
+                              </div>
+                            </div>
+
+                            <label className="planner-email-option">
+                              <input
+                                type="checkbox"
+                                checked={scheduleForm.notify_email}
+                                onChange={event =>
+                                  setScheduleForm(current => ({
+                                    ...current,
+                                    notify_email: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <span className="planner-email-option-icon">
+                                {scheduleForm.notify_email ? (
+                                  <Bell size={16} />
+                                ) : (
+                                  <BellOff size={16} />
+                                )}
+                              </span>
+                              <span>
+                                <strong>Email me when this session ends</strong>
+                                <small>
+                                  Notification will be sent to your verified account email.
+                                </small>
+                              </span>
+                            </label>
+
+                            <div className="planner-schedule-form-actions">
+                              <button
+                                type="button"
+                                className="planner-secondary-button"
+                                onClick={() => setSchedulingPlan(null)}
+                                disabled={scheduleSaving}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="planner-primary-button"
+                                disabled={scheduleSaving}
+                              >
+                                {scheduleSaving ? (
+                                  <>
+                                    <span className="planner-button-spinner" />
+                                    Scheduling...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CalendarPlus size={16} />
+                                    Save Session
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {planScheduledSessions.length === 0 ? (
+                          <p className="planner-muted-message">
+                            No scheduled sessions for this study plan yet.
+                          </p>
+                        ) : (
+                          <div className="planner-scheduled-list">
+                            {planScheduledSessions.map(session => (
+                              <div
+                                key={session.id}
+                                className="planner-scheduled-row"
+                              >
+                                <div className="planner-scheduled-info">
+                                  <strong>{session.topic}</strong>
+                                  <span>
+                                    <Clock size={13} />
+                                    {formatManilaDateTime(session.start_at)}
+                                    {' ? '}
+                                    {formatManilaDateTime(session.end_at)}
+                                    {' ? Asia/Manila'}
+                                  </span>
+                                  <span className={`planner-notification-status planner-notification-${session.notification_status}`}>
+                                    <Mail size={13} />
+                                    {session.notification_status === 'sent'
+                                      ? 'Email sent'
+                                      : session.notification_status === 'failed'
+                                        ? 'Email failed'
+                                        : session.notification_status === 'processing'
+                                          ? 'Sending email'
+                                          : session.notification_status === 'disabled'
+                                            ? 'Email notification off'
+                                            : 'Email pending'}
+                                  </span>
+                                </div>
+
+                                {session.status === 'scheduled' && (
+                                  <button
+                                    type="button"
+                                    className="planner-scheduled-cancel"
+                                    onClick={() =>
+                                      cancelScheduledSession(session.id)
+                                    }
+                                    title="Cancel scheduled session"
+                                    aria-label={`Cancel ${session.topic}`}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </section>
 
                       {/* Schedule */}
                       {plan.schedule && (

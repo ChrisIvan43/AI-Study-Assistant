@@ -31,3 +31,5 @@ pydantic-settings>=2.0.0
 
 # Utilities
 python-dotenv>=1.0.0
+
+tzdata==2026.6

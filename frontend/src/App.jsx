@@ -15,6 +15,9 @@ const Flashcards    = lazy(() => import('./pages/Flashcards'))
 const Chat          = lazy(() => import('./pages/Chat'))
 const StudyPlanner  = lazy(() => import('./pages/StudyPlanner'))
 const Progress      = lazy(() => import('./pages/Progress'))
+const AccountSettings = lazy(() => import('./pages/AccountSettings'))
+const VerifyEmailChange = lazy(() => import('./pages/VerifyEmailChange'))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
 
 const AdminLayout    = lazy(() => import('./components/AdminLayout'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
@@ -42,6 +45,8 @@ export default function App() {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-email-change" element={<VerifyEmailChange />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
 
             {/* Administrator routes */}
             <Route
@@ -100,6 +105,11 @@ export default function App() {
             <Route
               path="/progress"
               element={<ProtectedRoute><Progress /></ProtectedRoute>}
+            />
+
+            <Route
+              path="/settings"
+              element={<ProtectedRoute><AccountSettings /></ProtectedRoute>}
             />
 
             {/* Default routes */}
