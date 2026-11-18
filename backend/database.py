@@ -13,10 +13,20 @@ if DATABASE_URL.startswith("postgresql://"):
         1,
     )
 
+engine_options = {
+    "echo": False,
+}
+
+if "sqlite" not in DATABASE_URL:
+    engine_options.update({
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+    })
+
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
-    echo=False,
+    **engine_options,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -30,4 +40,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
