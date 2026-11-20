@@ -111,6 +111,36 @@ def get_quiz_by_id(quiz_id: int, db: Session) -> QuizResponse:
     )
 
 
+@router.get("/document/{document_id}", response_model=QuizResponse)
+def get_latest_quiz_for_document(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the latest saved quiz for a document."""
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    quiz = db.query(Quiz).filter(
+        Quiz.document_id == document_id
+    ).order_by(Quiz.id.desc()).first()
+
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No quiz found for this document",
+        )
+
+    return get_quiz_by_id(quiz.id, db)
+
 @router.get("/{quiz_id}", response_model=QuizResponse)
 def get_quiz(
     quiz_id: int,

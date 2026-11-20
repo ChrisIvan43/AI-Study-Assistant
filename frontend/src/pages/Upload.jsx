@@ -8,6 +8,7 @@ import {
   FileText,
   FileType,
   File,
+  Image,
   X,
   FolderOpen,
   Sparkles,
@@ -39,8 +40,8 @@ export default function Upload() {
 
     const ext = '.' + selectedFile.name.split('.').pop().toLowerCase()
 
-    if (!['.pdf', '.docx', '.txt'].includes(ext)) {
-      toast.error('Only PDF, DOCX, and TXT files are supported')
+    if (!['.pdf', '.docx', '.pptx', '.txt', '.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+      toast.error('Supported formats: PDF, DOCX, PPTX, TXT, JPG, PNG, and WEBP')
       return
     }
 
@@ -110,6 +111,14 @@ export default function Upload() {
       return { label: 'Word document', icon: FileType, color: 'blue' }
     }
 
+    if (ext === 'pptx') {
+      return { label: 'PowerPoint presentation', icon: FileType, color: 'orange' }
+    }
+
+    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+      return { label: 'Image study material', icon: Image, color: 'purple' }
+    }
+
     return { label: 'Text document', icon: File, color: 'cyan' }
   }
 
@@ -126,7 +135,8 @@ export default function Upload() {
     'Use well-formatted documents with clear headings.',
     'PDF files with selectable text work best.',
     'For best AI summaries, keep documents under 50 pages.',
-    'Supported formats: PDF, DOCX, and TXT.',
+    'Supported formats: PDF, DOCX, PPTX, TXT, JPG, JPEG, PNG, and WEBP.',
+    'For images, use clear and readable photos of your study material.',
   ]
 
   return (
@@ -149,7 +159,7 @@ export default function Upload() {
         <section className="upload-panel">
           <div className="upload-panel-heading">
             <div>
-              <h2>Choose a document</h2>
+              <h2>Choose a document or image</h2>
               <p>Upload a file from your device to get started.</p>
             </div>
 
@@ -193,7 +203,7 @@ export default function Upload() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.txt"
+              accept=".pdf,.docx,.pptx,.txt,.jpg,.jpeg,.png,.webp"
               hidden
               disabled={uploading}
               onChange={(event) => {
@@ -249,7 +259,9 @@ export default function Upload() {
                 <div className="upload-format-list">
                   <span><FileText size={15} /> PDF</span>
                   <span><FileType size={15} /> DOCX</span>
+                  <span><FileType size={15} /> PPTX</span>
                   <span><File size={15} /> TXT</span>
+                  <span><Image size={15} /> Images</span>
                 </div>
               </div>
             )}
@@ -257,7 +269,7 @@ export default function Upload() {
 
           <div className="upload-file-limit">
             <span>Maximum file size: 10 MB</span>
-            <span>Supported formats: PDF, DOCX, TXT</span>
+            <span>Supported formats: PDF, DOCX, PPTX, TXT, JPG, JPEG, PNG, WEBP</span>
           </div>
 
           {collections.length > 0 && (
@@ -300,7 +312,7 @@ export default function Upload() {
             {uploading ? (
               <>
                 <span className="upload-button-spinner" />
-                Uploading your document...
+                Uploading your study material...
               </>
             ) : (
               <>
@@ -312,7 +324,7 @@ export default function Upload() {
           </button>
 
           <p className="upload-submit-note">
-            Your document will be processed and opened in the summary workspace.
+            Your study material will be processed and opened in the summary workspace.
           </p>
         </section>
 

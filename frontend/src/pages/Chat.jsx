@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useRef } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   Bot,
@@ -11,15 +11,21 @@ import {
   Sparkles,
   User,
   LoaderCircle,
+  MessageSquareText,
 } from 'lucide-react'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export default function Chat() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const docId = searchParams.get('doc')
+  const isGeneralChat = !docId
 
   const [document, setDocument] = useState(null)
+  const [documents, setDocuments] = useState([])
   const [messages, setMessages] = useState([])
   const [question, setQuestion] = useState('')
   const [sending, setSending] = useState(false)
@@ -28,68 +34,83 @@ export default function Chat() {
   const endRef = useRef(null)
 
   useEffect(() => {
-    if (!docId) {
+    let active = true
+
+    const initialize = async () => {
+      setFetching(true)
       setDocument(null)
       setMessages([])
-      setFetching(false)
-      return
+
+      try {
+        const response = await api.get('/documents')
+        if (active) {
+          setDocuments(response.data.documents || [])
+        }
+      } catch {
+        if (active) {
+          toast.error('Failed to load your documents')
+        }
+      }
+
+      if (!docId) {
+        if (active) setFetching(false)
+        return
+      }
+
+      try {
+        const response = await api.get(`/documents/${docId}`)
+        if (active) setDocument(response.data)
+      } catch {
+        if (active) toast.error('Failed to load document')
+      }
+
+      try {
+        const response = await api.get(`/chat/${docId}`)
+        if (active) {
+          const formattedMessages = []
+
+          ;(response.data.chats || []).forEach((chat) => {
+            formattedMessages.push({
+              role: 'user',
+              content: chat.question,
+              id: `q-${chat.id}`,
+            })
+
+            formattedMessages.push({
+              role: 'assistant',
+              content: chat.answer,
+              id: `a-${chat.id}`,
+            })
+          })
+
+          setMessages(formattedMessages)
+        }
+      } catch {
+        // Chat history is optional.
+      }
+
+      if (active) setFetching(false)
     }
 
-    setFetching(true)
-    setDocument(null)
-    setMessages([])
+    initialize()
 
-    fetchDocument()
-    loadHistory()
+    return () => {
+      active = false
+    }
   }, [docId])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  const fetchDocument = async () => {
-    try {
-      const r = await api.get(`/documents/${docId}`)
-      setDocument(r.data)
-    } catch {
-      toast.error('Failed to load document')
-    } finally {
-      setFetching(false)
-    }
-  }
-
-  const loadHistory = async () => {
-    try {
-      const r = await api.get(`/chat/${docId}`)
-      const formattedMessages = []
-
-      ;(r.data.chats || []).forEach((chat) => {
-        formattedMessages.push({
-          role: 'user',
-          content: chat.question,
-          id: `q-${chat.id}`,
-        })
-
-        formattedMessages.push({
-          role: 'assistant',
-          content: chat.answer,
-          id: `a-${chat.id}`,
-        })
-      })
-
-      setMessages(formattedMessages)
-    } catch {
-      // Chat history is optional. A new conversation can still begin.
-    }
-  }
-
   const send = async (e) => {
     e.preventDefault()
 
     const trimmedQuestion = question.trim()
-    if (!trimmedQuestion || sending || !docId) return
+    if (!trimmedQuestion || sending) return
 
     const currentQuestion = trimmedQuestion
+    const previousMessages = messages
 
     setMessages((previous) => [
       ...previous,
@@ -104,22 +125,37 @@ export default function Chat() {
     setSending(true)
 
     try {
-      const r = await api.post('/chat', {
-        document_id: parseInt(docId),
-        question: currentQuestion,
-      })
+      let answer
+
+      if (isGeneralChat) {
+        const response = await api.post('/chat/general', {
+          question: currentQuestion,
+          conversation_history: previousMessages.slice(-12).map(
+            ({ role, content }) => ({ role, content })
+          ),
+        })
+
+        answer = response.data.answer
+      } else {
+        const response = await api.post('/chat', {
+          document_id: parseInt(docId, 10),
+          question: currentQuestion,
+        })
+
+        answer = response.data.answer
+      }
 
       setMessages((previous) => [
         ...previous,
         {
           role: 'assistant',
-          content: r.data.answer,
-          id: `resp-${r.data.id}`,
+          content: answer,
+          id: `resp-${Date.now()}`,
         },
       ])
-    } catch (e) {
+    } catch (error) {
       const message =
-        e.response?.data?.detail || 'Failed to get an answer. Please try again.'
+        error.response?.data?.detail || 'Failed to get an answer. Please try again.'
 
       setMessages((previous) => [
         ...previous,
@@ -134,35 +170,23 @@ export default function Chat() {
     }
   }
 
-  const suggestedQuestions = [
-    'What are the main ideas in this document?',
-    'Explain the most important concepts.',
-    'Give me a short review of this topic.',
-  ]
+  const suggestedQuestions = isGeneralChat
+    ? [
+        'What is StudyCraft and what can I do with it?',
+        'How do I generate flashcards, summaries, and quizzes?',
+        'How can I chat with my uploaded study materials?',
+      ]
+    : [
+        'What are the main ideas in this document?',
+        'Explain the most important concepts.',
+        'Give me a short review of this topic.',
+      ]
 
   if (fetching) {
     return (
       <div className="chat-loading">
         <LoaderCircle size={30} className="chat-loading-icon" />
         <p>Preparing your study assistant...</p>
-      </div>
-    )
-  }
-
-  if (!docId || !document) {
-    return (
-      <div className="chat-page">
-        <div className="chat-empty-state">
-          <div className="chat-empty-icon">
-            <MessageCircle size={34} />
-          </div>
-          <h2>No Document Selected</h2>
-          <p>Select a document first to start a conversation with your AI study assistant.</p>
-          <Link to="/dashboard" className="chat-primary-link">
-            <ArrowLeft size={17} />
-            Go to Dashboard
-          </Link>
-        </div>
       </div>
     )
   }
@@ -187,8 +211,12 @@ export default function Chat() {
                   <Sparkles size={23} />
                 </div>
                 <div>
-                  <h1>AI Study Assistant</h1>
-                  <p>Ask questions and understand your study materials.</p>
+                  <h1>{isGeneralChat ? 'Chat with StudyCraft AI' : 'AI Study Assistant'}</h1>
+                  <p>
+                    {isGeneralChat
+                      ? 'Ask about StudyCraft or get help using your study materials.'
+                      : 'Ask questions and understand your study materials.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -203,21 +231,48 @@ export default function Chat() {
         <section className="chat-workspace">
           <div className="chat-document-bar">
             <div className="chat-document-icon">
-              <FileText size={19} />
+              {isGeneralChat ? (
+                <MessageSquareText size={19} />
+              ) : (
+                <FileText size={19} />
+              )}
             </div>
 
             <div className="chat-document-info">
-              <span>Currently studying</span>
-              <strong title={document.title}>{document.title}</strong>
+              <span>{isGeneralChat ? 'PLATFORM ASSISTANT' : 'CURRENTLY STUDYING'}</span>
+              <strong title={document?.title || 'StudyCraft AI'}>
+                {isGeneralChat ? 'StudyCraft AI' : document?.title || 'Document unavailable'}
+              </strong>
             </div>
 
-            <Link
-              to={`/summary?doc=${docId}`}
-              className="chat-summary-link"
-            >
-              <BookOpen size={16} />
-              <span>View Summary</span>
-            </Link>
+            {isGeneralChat ? (
+              <select
+                className="chat-document-select"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) navigate(`/chat?doc=${e.target.value}`)
+                }}
+                aria-label="Choose a document to chat about"
+              >
+                <option value="">Chat with a document...</option>
+                {documents.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="chat-mode-links">
+                <Link to="/chat" className="chat-summary-link">
+                  <MessageCircle size={16} />
+                  <span>StudyCraft Help</span>
+                </Link>
+                <Link to={`/summary?doc=${docId}`} className="chat-summary-link">
+                  <BookOpen size={16} />
+                  <span>View Summary</span>
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="chat-conversation">
@@ -230,11 +285,18 @@ export default function Chat() {
                   </span>
                 </div>
 
-                <span className="chat-eyebrow">YOUR PERSONAL STUDY ASSISTANT</span>
-                <h2>What would you like to learn?</h2>
+                <span className="chat-eyebrow">
+                  {isGeneralChat ? 'YOUR STUDYCRAFT GUIDE' : 'YOUR PERSONAL STUDY ASSISTANT'}
+                </span>
+                <h2>
+                  {isGeneralChat
+                    ? 'How can I help you today?'
+                    : 'What would you like to learn?'}
+                </h2>
                 <p>
-                  Ask me anything about your document. I can explain difficult
-                  concepts, identify key ideas, and help you review.
+                  {isGeneralChat
+                    ? 'Ask about StudyCraft features, how to use the platform, or choose a document to discuss its contents.'
+                    : 'Ask me anything about your document. I can explain difficult concepts, identify key ideas, and help you review.'}
                 </p>
 
                 <div className="chat-suggestions">
@@ -269,16 +331,31 @@ export default function Chat() {
 
                 <div className="chat-message-body">
                   <span className="chat-message-author">
-                    {msg.role === 'user' ? 'You' : 'Study Assistant'}
+                    {msg.role === 'user' ? 'You' : 'StudyCraft AI'}
                   </span>
                   <div
                     className={
-                      msg.role === 'user'
-                        ? 'chat-bubble-user'
-                        : 'chat-bubble-ai'
+                      msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'
                     }
                   >
-                    <p>{msg.content}</p>
+                    {msg.role === 'assistant' ? (
+                      <div className="chat-markdown">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            table: ({ node, ...props }) => (
+                              <div className="chat-table-wrapper">
+                                <table {...props} />
+                              </div>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p>{msg.content}</p>
+                    )}
                   </div>
                 </div>
 
@@ -297,7 +374,7 @@ export default function Chat() {
                 </div>
 
                 <div className="chat-message-body">
-                  <span className="chat-message-author">Study Assistant</span>
+                  <span className="chat-message-author">StudyCraft AI</span>
                   <div className="chat-bubble-ai chat-typing">
                     <span />
                     <span />
@@ -316,7 +393,11 @@ export default function Chat() {
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask anything about your document..."
+                placeholder={
+                  isGeneralChat
+                    ? 'Ask anything about StudyCraft...'
+                    : 'Ask anything about your document...'
+                }
                 disabled={sending}
                 aria-label="Your question"
               />

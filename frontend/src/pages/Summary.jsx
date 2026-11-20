@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -49,6 +49,18 @@ export default function Summary() {
 
         if (active) {
           setDocument(response.data)
+        }
+
+        try {
+          const summaryResponse = await api.get(`/summary/${docId}`)
+
+          if (active) {
+            setSummary(summaryResponse.data)
+          }
+        } catch {
+          if (active) {
+            setSummary(null)
+          }
         }
       } catch {
         if (active) {
@@ -194,10 +206,10 @@ export default function Summary() {
               </div>
 
               <div className="summary-decoration-star summary-star-one">
-                ✦
+                âœ¦
               </div>
               <div className="summary-decoration-star summary-star-two">
-                ✧
+                âœ§
               </div>
             </div>
 
@@ -331,7 +343,7 @@ export default function Summary() {
                 <div className="summary-concept-list">
                   {keyPoints.map((point, index) => {
                     const cleanPoint = String(point)
-                      .replace(/^[-*•]\s*/, '')
+                      .replace(/^[-*â€¢]\s*/, '')
                       .trim()
 
                     if (!cleanPoint) return null

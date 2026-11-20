@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { MailCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
@@ -7,6 +8,7 @@ export default function Register() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ name:'', email:'', password:'', confirmPassword:'' })
   const [loading, setLoading] = useState(false)
+  const [pendingEmail, setPendingEmail] = useState('')
 
   const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))
 
@@ -27,19 +29,8 @@ export default function Register() {
         password: form.password,
       })
 
-      if (response.data.verification_email_sent === true) {
-        toast.success(
-          response.data.message ||
-          'Account created. Check your email to verify your address.'
-        )
-      } else {
-        toast(
-          response.data.message ||
-          'Account created, but the verification email could not be sent. Sign in and resend it from Account Settings.'
-        )
-      }
-
-      navigate('/login')
+      setPendingEmail(response.data.email || form.email.trim().toLowerCase())
+      toast.success(response.data.message || 'Check your Gmail inbox to finish registration.')
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Registration failed')
     } finally { setLoading(false) }
@@ -77,6 +68,47 @@ export default function Register() {
 
         {/* Card */}
         <div className="auth-card">
+          {pendingEmail ? (
+            <div style={{ textAlign: 'center', padding: '0.75rem 0.25rem' }}>
+              <div style={{
+                width: '68px', height: '68px', borderRadius: '20px',
+                margin: '0 auto 1.2rem', display: 'grid', placeItems: 'center',
+                color: '#4ade80', background: 'rgba(34,197,94,0.1)',
+                border: '1px solid rgba(34,197,94,0.25)', fontSize: '1.8rem',
+              }}><MailCheck size={30} /></div>
+              <h2 style={{ color: '#e8efff', fontSize: '1.25rem', marginBottom: '0.7rem' }}>
+                Check your Gmail inbox
+              </h2>
+              <p style={{ color: '#9bb0df', fontSize: '0.9rem', lineHeight: 1.7 }}>
+                We sent a verification link to:
+              </p>
+              <p style={{ color: '#67a7ff', fontWeight: 700, margin: '0.45rem 0 1rem', overflowWrap: 'anywhere' }}>
+                {pendingEmail}
+              </p>
+              <p style={{ color: '#9bb0df', fontSize: '0.85rem', lineHeight: 1.7 }}>
+                Open the email and click the verification link to complete your registration.
+                The link expires in 30 minutes. You cannot sign in until your email is verified.
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => navigate('/login')}
+                style={{ width: '100%', padding: '0.85rem', marginTop: '1.2rem' }}
+              >
+                Go to sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingEmail('')}
+                style={{
+                  width: '100%', marginTop: '0.8rem', padding: '0.55rem',
+                  color: '#8db8ff', background: 'transparent', border: 0, cursor: 'pointer',
+                }}
+              >
+                Back to registration
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label className="label">Full Name</label>
@@ -86,7 +118,7 @@ export default function Register() {
             <div>
               <label className="label">Email Address</label>
               <input type="email" name="email" value={form.email} onChange={handleChange}
-                placeholder="you@example.com" required className="input-field" />
+                placeholder="you@gmail.com" required className="input-field" />
             </div>
             <div>
               <label className="label">Password</label>
@@ -113,6 +145,7 @@ export default function Register() {
                 : '→ Create Account'}
             </button>
           </form>
+          )}
 
           <div style={{ height:'1px', margin:'1.4rem 0',
             background:'linear-gradient(90deg, transparent, rgba(41,121,255,0.3), transparent)' }} />

@@ -32,6 +32,10 @@ export default function Quiz() {
     if (quizId) fetchQuizById()
   }, [quizId])
 
+  useEffect(() => {
+    if (docId && !quizId) fetchLatestQuizForDocument()
+  }, [docId, quizId])
+
   const fetchDocument = async () => {
     try {
       const r = await api.get(`/documents/${docId}`)
@@ -52,6 +56,22 @@ export default function Quiz() {
       setResult(null)
     } catch {
       toast.error('Failed to load quiz')
+    }
+  }
+
+  const fetchLatestQuizForDocument = async () => {
+    try {
+      const r = await api.get(`/quiz/document/${docId}`)
+      setQuiz(r.data)
+      setAnswers({})
+      setSubmitted(false)
+      setResult(null)
+    } catch (error) {
+      setQuiz(null)
+
+      if (error.response?.status !== 404) {
+        toast.error('Failed to load saved quiz')
+      }
     }
   }
 

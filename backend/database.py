@@ -1,8 +1,19 @@
+﻿import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import os
+
+
+# Match the environment-loading order used by main.py and Alembic.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ENV = Path(__file__).resolve().parent / ".env"
+
+load_dotenv(BACKEND_ENV, override=False)
+load_dotenv(PROJECT_ROOT / ".env.local", override=False)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./study_assistant.db")
 

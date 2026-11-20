@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User, Document, Chat
-from schemas import ChatRequest, ChatResponse, ChatHistoryResponse
+from schemas import ChatRequest, ChatResponse, ChatHistoryResponse, GeneralChatRequest
 from utils.auth import get_current_user
-from services.ai_service import chat_with_document
+from services.ai_service import chat_with_document, chat_about_studycraft
 
 router = APIRouter(prefix="/chat", tags=["AI Chat"])
 
@@ -79,6 +79,26 @@ def ask_question(
     db.refresh(db_chat)
 
     return db_chat
+
+
+@router.post("/general")
+def ask_general_question(
+    request: GeneralChatRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Answer general questions about StudyCraft."""
+    try:
+        answer = chat_about_studycraft(
+            question=request.question,
+            conversation_history=request.conversation_history,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI service error: {str(e)}",
+        )
+
+    return {"answer": answer}
 
 
 @router.get("/{document_id}", response_model=ChatHistoryResponse)

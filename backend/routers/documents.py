@@ -1,5 +1,8 @@
 import os
 import shutil
+import io
+import zipfile
+import hashlib
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, status
@@ -17,6 +20,125 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+def _get_document_file_size_bytes(document: Document) -> int:
+    """Return a safe, server-calculated size for a file inside UPLOAD_DIR."""
+    try:
+        upload_root = os.path.realpath(UPLOAD_DIR)
+        file_path = os.path.realpath(document.file_path)
+
+        if os.path.commonpath([upload_root, file_path]) != upload_root:
+            return 0
+
+        if not os.path.isfile(file_path):
+            return 0
+
+        return os.path.getsize(file_path)
+    except (OSError, ValueError, TypeError):
+        return 0
+
+
+def _image_signature_matches(extension: str, content: bytes) -> bool:
+    """Check that an uploaded image has the expected file signature."""
+    if extension in {".jpg", ".jpeg"}:
+        return content.startswith(b"\xff\xd8\xff")
+
+    if extension == ".png":
+        return content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    if extension == ".webp":
+        return (
+            len(content) >= 12
+            and content.startswith(b"RIFF")
+            and content[8:12] == b"WEBP"
+        )
+
+    return True
+
+
+
+def _pptx_package_matches(content: bytes) -> bool:
+    """Validate a PPTX ZIP package without extracting its contents to disk."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            entries = archive.infolist()
+            names = {entry.filename for entry in entries}
+
+            if len(entries) > 2000:
+                return False
+
+            total_uncompressed_size = sum(entry.file_size for entry in entries)
+            if total_uncompressed_size > 100 * 1024 * 1024:
+                return False
+
+            if "[Content_Types].xml" not in names:
+                return False
+
+            if "ppt/presentation.xml" not in names:
+                return False
+
+            if any(name.lower().endswith("vbaproject.bin") for name in names):
+                return False
+
+            content_types = archive.read("[Content_Types].xml")
+
+            expected_type = (
+                b"application/vnd.openxmlformats-officedocument."
+                b"presentationml.presentation.main+xml"
+            )
+
+            return expected_type in content_types
+
+    except (zipfile.BadZipFile, KeyError, OSError, RuntimeError):
+        return False
+
+
+
+
+
+def _has_duplicate_document_content(db: Session, user_id: int, content: bytes) -> bool:
+    """Check whether this user already has an identical uploaded file."""
+    target_hash = hashlib.sha256(content).digest()
+    target_size = len(content)
+    upload_root = os.path.normcase(os.path.realpath(UPLOAD_DIR))
+
+    existing_paths = (
+        db.query(Document.file_path)
+        .filter(Document.user_id == user_id)
+        .all()
+    )
+
+    for (stored_path,) in existing_paths:
+        if not stored_path:
+            continue
+
+        try:
+            resolved_path = os.path.normcase(os.path.realpath(stored_path))
+
+            # Only inspect files physically inside the application's upload folder.
+            if os.path.commonpath([upload_root, resolved_path]) != upload_root:
+                continue
+
+            if not os.path.isfile(resolved_path):
+                continue
+
+            if os.path.getsize(resolved_path) != target_size:
+                continue
+
+            digest = hashlib.sha256()
+            with open(resolved_path, "rb") as existing_file:
+                for chunk in iter(lambda: existing_file.read(1024 * 1024), b""):
+                    digest.update(chunk)
+
+            if digest.digest() == target_hash:
+                return True
+
+        except (OSError, ValueError):
+            # Ignore inaccessible, missing, or invalid stored paths.
+            continue
+
+    return False
+
+
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
@@ -24,12 +146,12 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload a document (PDF, DOCX, or TXT)."""
+    """Upload a document or image and extract its study content."""
     # Validate file extension
     if not allowed_file(file.filename):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type not supported. Allowed: PDF, DOCX, TXT",
+            detail="File type not supported. Allowed: PDF, DOCX, TXT, JPG, JPEG, PNG, WEBP",
         )
 
     if collection_id is not None:
@@ -49,6 +171,27 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="File is too large. Maximum size is 10MB.",
+        )
+
+    extension = os.path.splitext(file.filename.lower())[1]
+    if extension in {".jpg", ".jpeg", ".png", ".webp"}:
+        if not _image_signature_matches(extension, file_content):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The uploaded image content does not match its file extension.",
+            )
+    elif extension == ".pptx":
+        if not _pptx_package_matches(file_content):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The uploaded file is not a valid, supported PowerPoint presentation.",
+            )
+
+    # Reject identical content already uploaded by this user.
+    if _has_duplicate_document_content(db, current_user.id, file_content):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This file has already been uploaded. Open your existing document instead.",
         )
 
     # Generate unique filename and save
@@ -140,6 +283,7 @@ async def upload_document(
     response = DocumentResponse.model_validate(db_document)
     return response.model_copy(
         update={
+            "file_size_bytes": _get_document_file_size_bytes(db_document),
             "flashcards_generated": flashcards_generated,
             "flashcards_count": flashcards_count,
             "flashcards_error": flashcards_error,
@@ -159,7 +303,18 @@ def list_documents(
         query = query.filter(Document.collection_id == collection_id)
 
     documents = query.order_by(Document.created_at.desc()).all()
-    return DocumentListResponse(documents=documents, total=len(documents))
+
+    response_documents = [
+        DocumentResponse.model_validate(document).model_copy(
+            update={"file_size_bytes": _get_document_file_size_bytes(document)}
+        )
+        for document in documents
+    ]
+
+    return DocumentListResponse(
+        documents=response_documents,
+        total=len(response_documents),
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -180,7 +335,9 @@ def get_document(
             detail="Document not found",
         )
 
-    return document
+    return DocumentResponse.model_validate(document).model_copy(
+        update={"file_size_bytes": _get_document_file_size_bytes(document)}
+    )
 
 
 @router.put("/{document_id}/collection", response_model=DocumentResponse)
@@ -216,7 +373,9 @@ def update_document_collection(
     db.commit()
     db.refresh(document)
 
-    return document
+    return DocumentResponse.model_validate(document).model_copy(
+        update={"file_size_bytes": _get_document_file_size_bytes(document)}
+    )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

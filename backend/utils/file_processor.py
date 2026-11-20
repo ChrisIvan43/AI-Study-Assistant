@@ -2,7 +2,7 @@ import os
 import uuid
 from typing import Optional
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
@@ -74,6 +74,57 @@ def extract_text_from_txt(file_path: str) -> str:
         raise Exception(f"Error reading TXT file: {str(e)}")
 
 
+
+def extract_text_from_pptx(file_path: str) -> str:
+    """Extract readable text and table contents from a PowerPoint presentation."""
+    try:
+        from pptx import Presentation
+
+        presentation = Presentation(file_path)
+        text_parts = []
+
+        def collect_shape_text(shape, parts):
+            if getattr(shape, "has_text_frame", False):
+                text = shape.text.strip()
+                if text:
+                    parts.append(text)
+
+            if getattr(shape, "has_table", False):
+                for row in shape.table.rows:
+                    cells = [
+                        cell.text.strip()
+                        for cell in row.cells
+                        if cell.text.strip()
+                    ]
+                    if cells:
+                        parts.append(" | ".join(cells))
+
+            # Read grouped shapes without executing or extracting embedded content.
+            if hasattr(shape, "shapes"):
+                for child_shape in shape.shapes:
+                    collect_shape_text(child_shape, parts)
+
+        for slide_number, slide in enumerate(presentation.slides, start=1):
+            slide_parts = []
+
+            for shape in slide.shapes:
+                collect_shape_text(shape, slide_parts)
+
+            if slide_parts:
+                text_parts.append(
+                    f"[Slide {slide_number}]\\n" + "\\n".join(slide_parts)
+                )
+
+        return "\\n\\n".join(text_parts)
+
+    except ImportError:
+        raise Exception(
+            "python-pptx is not installed. Install it with: pip install python-pptx"
+        )
+    except Exception as e:
+        raise Exception(f"Error reading PowerPoint presentation: {str(e)}")
+
+
 def extract_text(file_path: str) -> str:
     """Extract text from a document based on its extension."""
     ext = os.path.splitext(file_path.lower())[1]
@@ -82,8 +133,14 @@ def extract_text(file_path: str) -> str:
         return extract_text_from_pdf(file_path)
     elif ext == ".docx":
         return extract_text_from_docx(file_path)
+    elif ext == ".pptx":
+        return extract_text_from_pptx(file_path)
     elif ext == ".txt":
         return extract_text_from_txt(file_path)
+    elif ext in {".jpg", ".jpeg", ".png", ".webp"}:
+        from services.ai_service import extract_text_from_image
+
+        return extract_text_from_image(file_path)
     else:
         raise ValueError(f"Unsupported file extension: {ext}")
 

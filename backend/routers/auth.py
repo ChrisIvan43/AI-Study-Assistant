@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 
 from database import get_db
-from models import User
+from models import User, PendingRegistration
 from schemas import (
     UserRegister,
     UserLogin,
@@ -22,6 +22,7 @@ from schemas import (
     EmailChangeVerifyRequest,
     ProfileNameUpdateRequest,
     PasswordChangeRequest,
+    RegistrationPendingResponse,
 )
 from services.email_service import send_email, EmailDeliveryError
 from utils.auth import (
@@ -35,76 +36,95 @@ from utils.auth import (
 router = APIRouter(tags=["Authentication"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=RegistrationPendingResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    """Register a new user account."""
-    # Check if email already exists
-    existing = db.query(User).filter(User.email == user_data.email).first()
-    if existing:
+    """Start registration; the actual account is created after email verification."""
+    email = user_data.email.strip().lower()
+
+    existing_user = (
+        db.query(User)
+        .filter(func.lower(User.email) == email)
+        .first()
+    )
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists",
+            detail="An account with this email already exists.",
         )
 
-    # Create new user
-    new_user = User(
-        name=user_data.name,
-        email=user_data.email,
-        password_hash=hash_password(user_data.password),
-        role="student",
+    now = datetime.now(timezone.utc)
+    pending = (
+        db.query(PendingRegistration)
+        .filter(func.lower(PendingRegistration.email) == email)
+        .first()
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
 
-    # Initial verification is separate from the email-change workflow.
-    verification_email_sent = True
+    if pending:
+        if _as_utc(pending.expires_at) > now:
+            if now - _as_utc(pending.requested_at) < timedelta(seconds=60):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="A verification email was recently requested. Please wait before trying again.",
+                )
+
+        pending.name = user_data.name
+        pending.password_hash = hash_password(user_data.password)
+        pending.expires_at = now + timedelta(minutes=30)
+        pending.requested_at = now
+    else:
+        pending = PendingRegistration(
+            name=user_data.name,
+            email=email,
+            password_hash=hash_password(user_data.password),
+            token_hash=secrets.token_hex(32),
+            expires_at=now + timedelta(minutes=30),
+            requested_at=now,
+        )
+        db.add(pending)
+
     try:
-        _send_initial_email_verification(new_user, db)
-    except HTTPException as exc:
-        if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
-            raise
-        verification_email_sent = False
+        db.flush()
+        _send_pending_registration_verification(pending, db, now=now)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account or pending registration already exists for this email.",
+        )
 
-    # Generate token
-    access_token = create_access_token(
-        data={"user_id": new_user.id, "email": new_user.email},
-        expires_delta=timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS),
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=UserResponse(
-            id=new_user.id,
-            name=new_user.name,
-            email=new_user.email,
-            role=new_user.role,
-            created_at=new_user.created_at,
-            email_verified_at=new_user.email_verified_at,
-            pending_email=new_user.pending_email,
-        ),
-        verification_email_sent=verification_email_sent,
-        message=(
-            "Account created. Check your inbox to verify your email."
-            if verification_email_sent
-            else (
-                "Account created, but the verification email could not be sent. "
-                "You can resend it from Account Settings."
-            )
-        ),
+    return RegistrationPendingResponse(
+        message="Check your Gmail inbox and verify your email address to finish creating your account. The link expires in 30 minutes.",
+        email=email,
+        expires_in_minutes=30,
     )
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate a user and return a JWT token."""
-    user = db.query(User).filter(User.email == credentials.email).first()
+    """Authenticate a user and record successful student login activity."""
+    email = credentials.email.strip().lower()
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == email)
+        .first()
+    )
+
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    if (user.role or "student").lower() == "student":
+        user.last_login_at = datetime.now(timezone.utc)
+        user.last_1_day_reminder_at = None
+        user.last_5_day_reminder_at = None
+        db.commit()
+        db.refresh(user)
 
     access_token = create_access_token(
         data={"user_id": user.id, "email": user.email},
@@ -125,6 +145,86 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         ),
     )
 
+
+def _send_pending_registration_verification(
+    pending: PendingRegistration,
+    db: Session,
+    *,
+    now: datetime | None = None,
+):
+    """Persist a hashed one-time token and send the pending-registration link."""
+    now = now or datetime.now(timezone.utc)
+
+    frontend_url = os.getenv(
+        "STUDYCRAFT_FRONTEND_URL",
+        "https://ai-study-assistant-9tp.pages.dev",
+    ).strip().rstrip("/")
+
+    is_local_frontend = frontend_url in {
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    }
+
+    if not frontend_url.startswith("https://") and not is_local_frontend:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email verification is not configured correctly.",
+        )
+
+    raw_token = secrets.token_urlsafe(32)
+    pending.token_hash = hashlib.sha256(
+        raw_token.encode("utf-8")
+    ).hexdigest()
+    pending.expires_at = now + timedelta(minutes=30)
+    pending.requested_at = now
+
+    db.commit()
+    db.refresh(pending)
+
+    verification_url = (
+        frontend_url + "/verify-email?" + urlencode({"token": raw_token})
+    )
+    safe_url = html.escape(verification_url, quote=True)
+    safe_name = html.escape(pending.name or "StudyCraft user")
+
+    subject = "Verify your StudyCraft account"
+    body = (
+        f"Hello {pending.name or 'StudyCraft user'},\n\n"
+        "Thanks for registering with StudyCraft. Verify your Gmail address "
+        "using this one-time link:\n"
+        f"{verification_url}\n\n"
+        "This link expires in 30 minutes. If you did not request this "
+        "registration, you can ignore this email."
+    )
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#172033">
+      <h2>Verify your StudyCraft account</h2>
+      <p>Hello {safe_name},</p>
+      <p>Confirm your Gmail address to finish creating your StudyCraft account.</p>
+      <p>
+        <a href="{safe_url}"
+           style="display:inline-block;padding:12px 20px;background:#2563eb;
+                  color:#ffffff;text-decoration:none;border-radius:8px">
+          Verify email address
+        </a>
+      </p>
+      <p>This one-time link expires in 30 minutes.</p>
+      <p>If you did not request this registration, you can ignore this message.</p>
+    </div>
+    """
+
+    try:
+        send_email(
+            to=pending.email,
+            subject=subject,
+            body=body,
+            html_body=html_body,
+        )
+    except EmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The verification email could not be sent. Please wait 60 seconds before trying registration again.",
+        )
 
 
 
@@ -246,11 +346,70 @@ def verify_initial_email(
     request: EmailChangeVerifyRequest,
     db: Session = Depends(get_db),
 ):
-    """Verify ownership of the account's current email address."""
+    """Verify a pending registration or a legacy account verification token."""
     token_hash = hashlib.sha256(
         request.token.encode("utf-8")
     ).hexdigest()
 
+    now = datetime.now(timezone.utc)
+
+    pending = (
+        db.query(PendingRegistration)
+        .filter(PendingRegistration.token_hash == token_hash)
+        .with_for_update()
+        .first()
+    )
+
+    if pending:
+        if now >= _as_utc(pending.expires_at):
+            db.delete(pending)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This verification link has expired. Please register again.",
+            )
+
+        existing_user = (
+            db.query(User)
+            .filter(func.lower(User.email) == pending.email.lower())
+            .first()
+        )
+        if existing_user:
+            db.delete(pending)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists. Please log in.",
+            )
+
+        new_user = User(
+            name=pending.name,
+            email=pending.email,
+            password_hash=pending.password_hash,
+            role="student",
+            email_verified_at=now,
+        )
+        db.add(new_user)
+        db.delete(pending)
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists. Please try logging in.",
+            )
+
+        db.refresh(new_user)
+        return {
+            "message": "Your email has been verified and your StudyCraft account has been created. You can now log in.",
+            "email": new_user.email,
+            "email_verified_at": new_user.email_verified_at,
+            "registration_completed": True,
+        }
+
+    # Backward compatibility for verification links issued to existing users.
     user = (
         db.query(User)
         .filter(User.email_verification_token_hash == token_hash)
@@ -263,7 +422,6 @@ def verify_initial_email(
             detail="This verification link is invalid or has expired.",
         )
 
-    now = datetime.now(timezone.utc)
     if now >= _as_utc(user.email_verification_expires_at):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -280,6 +438,7 @@ def verify_initial_email(
         "message": "Your email address has been successfully verified.",
         "email": user.email,
         "email_verified_at": user.email_verified_at,
+        "registration_completed": False,
     }
 
 

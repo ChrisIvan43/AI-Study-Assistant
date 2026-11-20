@@ -18,6 +18,12 @@ import {
   ArrowUpRight,
   BookOpen,
   ChevronRight,
+  CheckSquare,
+  Square,
+  X,
+  CircleCheck,
+  CircleAlert,
+  LoaderCircle,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -29,6 +35,13 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState([])
+  const [batchAction, setBatchAction] = useState('')
+  const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 })
+  const [batchResults, setBatchResults] = useState([])
+  const [batchError, setBatchError] = useState('')
+
+  const MAX_BATCH_FILES = 5
   const collectionFilter = searchParams.get('collection') || ''
 
   useEffect(() => {
@@ -48,6 +61,9 @@ export default function Dashboard() {
       ])
 
       setDocuments(dr.data.documents || [])
+      setSelectedDocumentIds([])
+      setBatchResults([])
+      setBatchError('')
       setProgress(pr.data)
       setCollections(cr.data.collections || [])
     } catch (error) {
@@ -59,6 +75,117 @@ export default function Dashboard() {
 
   const collectionName = (id) =>
     collections.find((collection) => collection.id === id)?.name
+
+  const visibleDocuments = documents.slice(0, 5)
+  const selectedDocuments = visibleDocuments.filter((doc) =>
+    selectedDocumentIds.includes(doc.id)
+  )
+  const batchCanRun =
+    selectedDocuments.length > 0 &&
+    selectedDocuments.length <= MAX_BATCH_FILES &&
+    !batchAction
+
+  const formatFileSize = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return 'Size unavailable'
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
+
+  const toggleDocumentSelection = (documentId) => {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId)
+        ? current.filter((id) => id !== documentId)
+        : current.length < MAX_BATCH_FILES
+          ? [...current, documentId]
+          : current
+    )
+    setBatchError('')
+  }
+
+  const selectAllVisibleDocuments = () => {
+    setSelectedDocumentIds(visibleDocuments.slice(0, MAX_BATCH_FILES).map((doc) => doc.id))
+    setBatchError('')
+  }
+
+  const clearBatchSelection = () => {
+    setSelectedDocumentIds([])
+    setBatchResults([])
+    setBatchError('')
+  }
+
+  const generateForSelectedDocuments = async (action) => {
+    if (batchAction || selectedDocuments.length === 0) return
+
+    if (selectedDocuments.length > MAX_BATCH_FILES) {
+      setBatchError(`Select no more than ${MAX_BATCH_FILES} documents.`)
+      return
+    }
+
+
+    const endpointByAction = {
+      flashcards: '/flashcards',
+      summary: '/summary',
+      quiz: '/quiz',
+    }
+
+    const endpoint = endpointByAction[action]
+    if (!endpoint) return
+
+    const resultPath = {
+      flashcards: '/flashcards',
+      summary: '/summary',
+      quiz: '/quiz',
+    }[action]
+
+    setBatchAction(action)
+    setBatchError('')
+    setBatchResults([])
+    setBatchProgress({ completed: 0, total: selectedDocuments.length })
+
+    const results = []
+
+    for (const doc of selectedDocuments) {
+      try {
+        const payload = { document_id: Number(doc.id) }
+
+        if (action === 'flashcards') {
+          payload.regenerate = false
+        }
+
+        await api.post(endpoint, payload)
+
+        results.push({
+          id: doc.id,
+          title: doc.title,
+          status: 'success',
+          message: `Generation ${action} completed.`,
+          path: `${resultPath}?doc=${doc.id}`,
+        })
+      } catch (error) {
+        const detail =
+          error?.response?.data?.detail ||
+          error?.response?.data?.message ||
+          error?.message ||
+          'Generation failed.'
+
+        results.push({
+          id: doc.id,
+          title: doc.title,
+          status: 'error',
+          message: String(detail),
+          path: null,
+        })
+      }
+
+      setBatchResults([...results])
+      setBatchProgress({
+        completed: results.length,
+        total: selectedDocuments.length,
+      })
+    }
+
+    setBatchAction('')
+  }
 
   if (loading) {
     return (
@@ -105,36 +232,6 @@ export default function Dashboard() {
     },
   ]
 
-  const quickActions = [
-    {
-      to: `/summary?doc=${latestDocument?.id}`,
-      icon: Sparkles,
-      title: 'Generate Summary',
-      description: 'Turn your material into clear notes',
-      color: 'blue',
-    },
-    {
-      to: `/quiz?doc=${latestDocument?.id}`,
-      icon: HelpCircle,
-      title: 'Take a Quiz',
-      description: 'Test what you have learned',
-      color: 'violet',
-    },
-    {
-      to: `/flashcards?doc=${latestDocument?.id}`,
-      icon: Layers,
-      title: 'Study Flashcards',
-      description: 'Practice with interactive cards',
-      color: 'cyan',
-    },
-    {
-      to: `/chat?doc=${latestDocument?.id}`,
-      icon: MessageSquareText,
-      title: 'Chat with Document',
-      description: 'Ask questions about your material',
-      color: 'green',
-    },
-  ]
 
   return (
     <div className="dashboard-page fade-in">
@@ -307,46 +404,162 @@ export default function Dashboard() {
                 </Link>
               </div>
             ) : (
-              <div className="dashboard-document-list">
-                {documents.slice(0, 5).map((doc) => {
-                  const name = collectionName(doc.collection_id)
+              <>
+                <div className="dashboard-batch-toolbar">
+                  <div className="dashboard-batch-selection">
+                    <div>
+                      <strong>{selectedDocuments.length} of {MAX_BATCH_FILES} selected</strong>
+                    </div>
+                    <div className="dashboard-batch-selection-actions">
+                      <button
+                        type="button"
+                        onClick={selectAllVisibleDocuments}
+                        disabled={!!batchAction || visibleDocuments.length === 0}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearBatchSelection}
+                        disabled={!!batchAction || selectedDocumentIds.length === 0}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
 
-                  return (
-                    <Link
-                      key={doc.id}
-                      to={`/summary?doc=${doc.id}`}
-                      className="dashboard-document-row"
+                  <div className="dashboard-batch-actions">
+                    <button
+                      type="button"
+                      onClick={() => generateForSelectedDocuments('flashcards')}
+                      disabled={!batchCanRun}
                     >
-                      <div className="dashboard-document-icon">
-                        <FileText size={21} />
-                      </div>
+                      <Layers size={15} />
+                      Flashcards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => generateForSelectedDocuments('summary')}
+                      disabled={!batchCanRun}
+                    >
+                      <Sparkles size={15} />
+                      Summary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => generateForSelectedDocuments('quiz')}
+                      disabled={!batchCanRun}
+                    >
+                      <HelpCircle size={15} />
+                      Quiz
+                    </button>
+                  </div>
 
-                      <div className="dashboard-document-info">
-                        <h3>{doc.title}</h3>
-                        <p>{doc.filename}</p>
+                  <p className="dashboard-batch-hint">Select up to 5 documents to generate at once.</p>
 
-                        {name && (
-                          <span className="dashboard-collection-tag">
-                            <FolderOpen size={12} />
-                            {name}
+                  {batchError && (
+                    <p className="dashboard-batch-warning">{batchError}</p>
+                  )}
+                </div>
+
+                <div className="dashboard-document-list">
+                  {visibleDocuments.map((doc) => {
+                    const name = collectionName(doc.collection_id)
+                    const isSelected = selectedDocumentIds.includes(doc.id)
+
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`dashboard-document-entry ${isSelected ? 'is-selected' : ''}`}
+                      >
+                        <label className="dashboard-document-select">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={!!batchAction || (!isSelected && selectedDocumentIds.length >= MAX_BATCH_FILES)}
+                            onChange={() => toggleDocumentSelection(doc.id)}
+                            aria-label={`Select ${doc.title}`}
+                          />
+                          <span className="dashboard-document-checkbox">
+                            {isSelected ? <CheckSquare size={19} /> : <Square size={19} />}
                           </span>
+                        </label>
+
+                        <Link
+                          to={`/summary?doc=${doc.id}`}
+                          className="dashboard-document-row"
+                        >
+                          <div className="dashboard-document-icon">
+                            <FileText size={21} />
+                          </div>
+
+                          <div className="dashboard-document-info">
+                            <h3>{doc.title}</h3>
+                            <p>{doc.filename}</p>
+
+                            {name && (
+                              <span className="dashboard-collection-tag">
+                                <FolderOpen size={12} />
+                                {name}
+                              </span>
+                            )}
+                            <span className="dashboard-document-size">
+                              {formatFileSize(Number(doc.file_size_bytes))}
+                            </span>
+                          </div>
+
+                          <span className="dashboard-document-date">
+                            {doc.created_at
+                              ? new Date(doc.created_at).toLocaleDateString()
+                              : ''}
+                          </span>
+
+                          <ChevronRight
+                            className="dashboard-document-arrow"
+                            size={17}
+                          />
+                        </Link>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {batchAction && (
+                  <div className="dashboard-batch-progress" role="status">
+                    <LoaderCircle size={17} className="dashboard-batch-spinner" />
+                    <span>
+                      Generating {batchAction} ? {batchProgress.completed} of {batchProgress.total} completed
+                    </span>
+                  </div>
+                )}
+
+                {batchResults.length > 0 && (
+                  <div className="dashboard-batch-results" aria-live="polite">
+                    <div className="dashboard-batch-results-heading">
+                      <strong>Generation results</strong>
+                      <span>
+                        {batchResults.filter((item) => item.status === 'success').length} successful, {' '}
+                        {batchResults.filter((item) => item.status === 'error').length} failed
+                      </span>
+                    </div>
+
+                    {batchResults.map((result) => (
+                      <div className="dashboard-batch-result" key={result.id}>
+                        {result.status === 'success'
+                          ? <CircleCheck size={17} className="dashboard-batch-success-icon" />
+                          : <CircleAlert size={17} className="dashboard-batch-error-icon" />}
+                        <div>
+                          <strong>{result.title}</strong>
+                          <span>{result.message}</span>
+                        </div>
+                        {result.path && (
+                          <Link to={result.path}>Open</Link>
                         )}
                       </div>
-
-                      <span className="dashboard-document-date">
-                        {doc.created_at
-                          ? new Date(doc.created_at).toLocaleDateString()
-                          : ''}
-                      </span>
-
-                      <ChevronRight
-                        className="dashboard-document-arrow"
-                        size={17}
-                      />
-                    </Link>
-                  )
-                })}
-              </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {documents.length > 0 && (
@@ -359,45 +572,28 @@ export default function Dashboard() {
             )}
           </section>
 
-          {/* Quick actions */}
+          {/* StudyCraft AI chat */}
           <section className="dashboard-quick-panel">
             <div className="dashboard-panel-heading">
-              <span className="dashboard-section-kicker">STUDY TOOLS</span>
-              <h2>Quick actions</h2>
-              <p>Jump straight into your next study activity.</p>
+              <span className="dashboard-section-kicker">STUDY ASSISTANT</span>
+              <h2>Chat with StudyCraft AI</h2>
+              <p>Ask questions about your files or learn how to use StudyCraft.</p>
             </div>
 
-            {documents.length === 0 ? (
-              <div className="dashboard-quick-empty">
-                <FolderOpen size={25} />
-                <p>Upload a document to unlock your study tools.</p>
-              </div>
-            ) : (
-              <div className="dashboard-quick-list">
-                {quickActions.map((action) => {
-                  const Icon = action.icon
+            <div className="dashboard-quick-list">
+              <Link to="/chat" className="dashboard-quick-action quick-green">
+                <div className="dashboard-quick-icon">
+                  <MessageSquareText size={21} />
+                </div>
 
-                  return (
-                    <Link
-                      key={action.title}
-                      to={action.to}
-                      className={`dashboard-quick-action quick-${action.color}`}
-                    >
-                      <div className="dashboard-quick-icon">
-                        <Icon size={21} />
-                      </div>
+                <div className="dashboard-quick-copy">
+                  <h3>Start a conversation</h3>
+                  <p>Chat about your documents or StudyCraft features.</p>
+                </div>
 
-                      <div className="dashboard-quick-copy">
-                        <h3>{action.title}</h3>
-                        <p>{action.description}</p>
-                      </div>
-
-                      <ChevronRight size={17} />
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
+                <ChevronRight size={17} />
+              </Link>
+            </div>
           </section>
 
         </div>

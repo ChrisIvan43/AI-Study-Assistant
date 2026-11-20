@@ -3,6 +3,7 @@ AI Service Module
 Supports multiple AI providers: OpenAI, Llama 3, Mistral, DeepSeek, Gemma
 Configure via environment variables.
 """
+import base64
 import os
 import json
 import re
@@ -15,6 +16,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
 LOCAL_API_URL = os.getenv("LOCAL_API_URL", "http://localhost:11434/api/generate")
 LOCAL_MODEL = os.getenv("LOCAL_MODEL", "llama3")
 
@@ -108,6 +110,100 @@ def _call_groq(prompt: str, system_prompt: str = "You are a helpful study assist
 
 
 # ─── Local (Ollama) Provider ───────────────────────────────────
+
+def extract_text_from_image(file_path: str) -> str:
+    """
+    Extract study material from an image using the Groq vision API.
+    Returns readable text and descriptions of relevant educational diagrams.
+    """
+    if not GROQ_API_KEY:
+        raise RuntimeError(
+            "Image reading requires a configured GROQ_API_KEY."
+        )
+
+    extension = os.path.splitext(file_path.lower())[1]
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    mime_type = mime_types.get(extension)
+
+    if not mime_type:
+        raise ValueError(f"Unsupported image format: {extension}")
+
+    try:
+        with open(file_path, "rb") as image_file:
+            image_bytes = image_file.read()
+
+        if not image_bytes:
+            raise ValueError("The uploaded image is empty.")
+
+        encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+        image_data_url = f"data:{mime_type};base64,{encoded_image}"
+
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=GROQ_API_KEY,
+            base_url="https://api.groq.com/openai/v1",
+        )
+
+        response = client.chat.completions.create(
+            model=GROQ_VISION_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an educational image-reading assistant. "
+                        "Accurately extract visible text, headings, labels, "
+                        "definitions, equations, tables, and important facts. "
+                        "Describe educational diagrams and their relationships "
+                        "when useful. Preserve the original meaning. "
+                        "Do not invent missing or unreadable information. "
+                        "Clearly mark text that cannot be read."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Extract the study material from this image. "
+                                "Organize the result with useful headings and "
+                                "include relevant diagram descriptions. "
+                                "Return plain text, not JSON or Markdown code fences."
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_data_url,
+                            },
+                        },
+                    ],
+                },
+            ],
+            temperature=0.1,
+            max_tokens=4000,
+        )
+
+        extracted_text = response.choices[0].message.content
+
+        if not isinstance(extracted_text, str) or not extracted_text.strip():
+            raise RuntimeError("The vision model returned no readable content.")
+
+        return extracted_text.strip()
+
+    except ImportError:
+        raise RuntimeError(
+            "OpenAI library not installed. Run: pip install openai"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Groq image extraction error: {str(e)}")
+
 
 def _call_local(prompt: str, system_prompt: str = "You are a helpful study assistant.") -> str:
     """Call a local model via Ollama API."""
@@ -465,6 +561,85 @@ Student's question: {question}
 
 IMPORTANT: Only use information from the document above to answer. If the question cannot be answered from the document, say "I cannot find information about this in the uploaded document." Do not use any external knowledge."""
 
-    system_prompt = "You are a helpful study assistant that answers questions strictly based on the uploaded document content."
+    system_prompt = """You are StudyCraft AI, a professional academic study assistant.
+
+Answer questions strictly and exclusively using information from the uploaded document.
+Never introduce external facts, assumptions, or unsupported information.
+If the answer cannot be found in the document, state:
+"I cannot find information about this in the uploaded document."
+
+Writing and presentation standards:
+- Maintain a formal, professional, and academically appropriate tone.
+- Give accurate, direct, and clearly structured explanations.
+- Use descriptive Markdown headings when an answer has multiple sections.
+- Separate paragraphs with appropriate spacing.
+- Use numbered lists for sequential instructions and bullet lists for related points.
+- Use Markdown tables only when they make comparisons or structured information easier to understand.
+- Use bold formatting selectively for important terms and concepts.
+- Avoid decorative asterisks, excessive emojis, slang, and unnecessary filler.
+- Do not repeat information unnecessarily.
+- Keep explanations relevant to the student's question.
+"""
+
+    return _call_ai(prompt, system_prompt)
+
+def chat_about_studycraft(
+    question: str,
+    conversation_history: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """Answer general questions about StudyCraft and how to use the platform."""
+    history_parts = []
+
+    for message in (conversation_history or [])[-6:]:
+        role = message.get("role", "user")
+        content = message.get("content", "").strip()
+
+        if role in ("user", "assistant") and content:
+            history_parts.append(f"{role.capitalize()}: {content[:2000]}")
+
+    history_text = "\n".join(history_parts)
+
+    prompt = f"""Previous conversation:
+{history_text if history_text else "This is the start of the conversation."}
+
+User's question:
+{question}
+
+Answer helpfully and clearly. Explain how to use StudyCraft when relevant.
+If the user asks about a particular uploaded file, explain that they should
+select that document in the chat interface so you can answer using its contents.
+Do not pretend to have read or accessed a document that was not provided.
+"""
+
+    system_prompt = """You are StudyCraft AI, the built-in assistant for the
+StudyCraft AI-powered study aid platform.
+
+Your role is to:
+- Explain what StudyCraft is and how students can use it.
+- Help users understand the platform's study tools and workflows.
+- Explain how to work with uploaded study documents.
+- Answer general study and platform navigation questions clearly.
+
+StudyCraft provides document-based study assistance, including AI-generated
+flashcards, summaries, quizzes, and chat with uploaded study materials.
+
+Maintain a formal, professional, and academically appropriate tone.
+Be accurate, concise, informative, and practical.
+
+Writing and presentation standards:
+- Organize longer answers using clear, descriptive Markdown headings.
+- Use well-spaced paragraphs with one main idea per paragraph.
+- Use numbered lists for procedures and bullet lists for related information.
+- Use Markdown tables when they meaningfully improve comparisons or structured data.
+- Use bold formatting selectively to emphasize important concepts.
+- Avoid decorative asterisks, excessive emojis, slang, conversational filler, and repetitive conclusions.
+- Explain technical concepts clearly and use appropriate terminology.
+- Provide direct answers before additional explanation when appropriate.
+
+Do not claim that the platform has features or capabilities that have not been established.
+Do not claim to see a user's files, account, settings, or activity unless that information is
+provided in the conversation. If a question requires document contents, guide
+the user to select that document in document chat.
+"""
 
     return _call_ai(prompt, system_prompt)

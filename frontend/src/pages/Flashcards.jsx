@@ -49,7 +49,7 @@ export default function Flashcards() {
       setDocument(r.data)
 
       try {
-        const cardsResponse = await api.get(/flashcards/)
+        const cardsResponse = await api.get(`/flashcards/${docId}`)
         const savedCards = Array.isArray(cardsResponse.data)
           ? cardsResponse.data
           : cardsResponse.data.flashcards || []

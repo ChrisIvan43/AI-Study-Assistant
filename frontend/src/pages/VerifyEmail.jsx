@@ -13,6 +13,7 @@ export default function VerifyEmail() {
 
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
+  const [registrationCompleted, setRegistrationCompleted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const handleVerify = async () => {
@@ -27,11 +28,14 @@ export default function VerifyEmail() {
     try {
       const response = await api.post('/email/verification/verify', { token })
 
-      if (isAuthenticated) {
+      const completedRegistration = response.data.registration_completed === true
+      setRegistrationCompleted(completedRegistration)
+
+      if (isAuthenticated && !completedRegistration) {
         try {
           await refreshUser()
         } catch {
-          // Verification succeeded; profile refresh can be retried after signing in.
+          // Legacy verification succeeded; profile refresh can be retried later.
         }
       }
 
@@ -69,7 +73,7 @@ export default function VerifyEmail() {
         <span className="account-eyebrow">STUDYCRAFT ACCOUNT SECURITY</span>
         <h1>
           {status === 'success'
-            ? 'Email verified'
+            ? registrationCompleted ? 'Account created successfully' : 'Email verified'
             : status === 'error'
               ? 'Verification unsuccessful'
               : 'Verify your email address'}
@@ -103,10 +107,12 @@ export default function VerifyEmail() {
 
         {status === 'success' && (
           <Link
-            to={isAuthenticated ? '/settings' : '/login'}
+            to={registrationCompleted ? '/login' : isAuthenticated ? '/settings' : '/login'}
             className="account-primary-button verification-submit"
           >
-            {isAuthenticated ? 'Return to account settings' : 'Continue to sign in'}
+            {registrationCompleted
+              ? 'Continue to sign in'
+              : isAuthenticated ? 'Return to account settings' : 'Continue to sign in'}
           </Link>
         )}
 
@@ -119,9 +125,16 @@ export default function VerifyEmail() {
           </Link>
         )}
 
-        <Link to={isAuthenticated ? '/settings' : '/login'} className="verification-back-link">
+        <Link
+          to={status === 'success' && registrationCompleted
+            ? '/login'
+            : isAuthenticated ? '/settings' : '/login'}
+          className="verification-back-link"
+        >
           <ArrowLeft size={16} />
-          {isAuthenticated ? 'Account settings' : 'Sign in to StudyCraft'}
+          {status === 'success' && registrationCompleted
+            ? 'Sign in to StudyCraft'
+            : isAuthenticated ? 'Account settings' : 'Sign in to StudyCraft'}
         </Link>
       </div>
     </div>

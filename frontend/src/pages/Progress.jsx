@@ -199,7 +199,7 @@ export default function Progress() {
                     <div className="progress-stat-icon">
                       <Icon size={21} />
                     </div>
-                    <ArrowUpRight size={17} className="progress-stat-arrow" />
+
                   </div>
 
                   <div className="progress-stat-value">

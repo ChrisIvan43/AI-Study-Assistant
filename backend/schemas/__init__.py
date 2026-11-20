@@ -1,6 +1,6 @@
 import re
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime, date
 
 
@@ -10,6 +10,34 @@ class UserRegister(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., max_length=255)
     password: str = Field(..., min_length=6, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 2:
+            raise ValueError("Enter a name with at least 2 characters.")
+        return normalized
+
+    @field_validator("email")
+    @classmethod
+    def validate_gmail_address(cls, value: str) -> str:
+        normalized = value.strip().lower()
+
+        if normalized.count("@") != 1:
+            raise ValueError("Enter a valid Gmail address.")
+
+        local, domain = normalized.rsplit("@", 1)
+
+        if (
+            domain not in {"gmail.com", "googlemail.com"}
+            or not re.fullmatch(r"[a-z0-9][a-z0-9.+-]*", local)
+            or ".." in local
+            or len(local) > 64
+        ):
+            raise ValueError("Enter a valid Gmail address.")
+
+        return normalized
 
 
 class UserLogin(BaseModel):
@@ -98,6 +126,12 @@ class TokenResponse(BaseModel):
     message: Optional[str] = None
 
 
+class RegistrationPendingResponse(BaseModel):
+    message: str
+    email: str
+    expires_in_minutes: int = 30
+
+
 # ─── Collection Schemas ─────────────────────────────────────────
 
 class CollectionRequest(BaseModel):
@@ -133,6 +167,7 @@ class DocumentResponse(BaseModel):
     title: str
     filename: str
     file_path: str
+    file_size_bytes: int = 0
     document_text: Optional[str] = None
     created_at: datetime
     flashcards_generated: Optional[bool] = None
@@ -270,6 +305,11 @@ class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
 
 
+class GeneralChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    conversation_history: Optional[List[Dict[str, str]]] = None
+
+
 class ChatResponse(BaseModel):
     id: int
     document_id: int
@@ -355,7 +395,7 @@ class ScheduledStudySessionCreate(BaseModel):
     topic: str = Field(..., min_length=1, max_length=255)
     start_at: datetime
     end_at: datetime
-    notify_email: bool = True
+    notify_email: bool = False
 
     @field_validator("topic")
     @classmethod
@@ -438,4 +478,3 @@ class ProgressResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
-

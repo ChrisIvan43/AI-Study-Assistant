@@ -1,0 +1,58 @@
+﻿name: StudyCraft Inactivity Email Reminders
+
+on:
+  schedule:
+    - cron: "5 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studycraft-inactivity-email-reminders
+  cancel-in-progress: false
+
+jobs:
+  process-inactivity-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Call protected StudyCraft inactivity reminder endpoint
+        shell: bash
+        env:
+          API_BASE_URL: ${{ secrets.STUDYCRAFT_API_BASE_URL }}
+          SCHEDULER_SECRET: ${{ secrets.STUDYCRAFT_SCHEDULER_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$API_BASE_URL" ]]; then
+            echo "::error::Missing STUDYCRAFT_API_BASE_URL repository secret."
+            exit 1
+          fi
+
+          if [[ -z "$SCHEDULER_SECRET" ]]; then
+            echo "::error::Missing STUDYCRAFT_SCHEDULER_SECRET repository secret."
+            exit 1
+          fi
+
+          API_BASE_URL="${API_BASE_URL%/}"
+
+          if [[ ! "$API_BASE_URL" =~ ^https:// ]]; then
+            echo "::error::API base URL must use HTTPS."
+            exit 1
+          fi
+
+          echo "Calling StudyCraft inactivity reminder scheduler..."
+
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --max-time 120 \
+            --request POST \
+            --header "X-StudyCraft-Scheduler-Secret: ${SCHEDULER_SECRET}" \
+            "${API_BASE_URL}/internal/scheduler/inactivity-reminders"
+
+          echo
+          echo "Inactivity reminder scheduler completed successfully."

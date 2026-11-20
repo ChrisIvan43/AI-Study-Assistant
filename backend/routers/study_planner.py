@@ -328,20 +328,14 @@ def create_scheduled_study_session(
     if not plan:
         raise HTTPException(status_code=404, detail="Study plan not found")
 
-    if request.notify_email and not current_user.email_verified_at:
-        raise HTTPException(
-            status_code=400,
-            detail="Verify your Gmail address before enabling session email notifications.",
-        )
-
     session = ScheduledStudySession(
         plan_id=plan.id,
         topic=request.topic,
         start_at=request.start_at.astimezone(timezone.utc),
         end_at=request.end_at.astimezone(timezone.utc),
-        notify_email=request.notify_email,
+        notify_email=False,
         status="scheduled",
-        notification_status="pending" if request.notify_email else "disabled",
+        notification_status="disabled",
     )
 
     db.add(session)

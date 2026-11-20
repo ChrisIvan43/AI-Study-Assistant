@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
@@ -23,9 +23,6 @@ import {
   Flame,
   RefreshCw,
   CalendarPlus,
-  Bell,
-  BellOff,
-  Mail,
 } from 'lucide-react'
 
 export default function StudyPlanner() {
@@ -47,7 +44,6 @@ export default function StudyPlanner() {
     topic: '',
     start_at: '',
     end_at: '',
-    notify_email: true,
   })
 
   const [form, setForm] = useState({
@@ -220,8 +216,7 @@ export default function StudyPlanner() {
       topic: '',
       start_at: getLocalDateTimeInput(start),
       end_at: getLocalDateTimeInput(end),
-      notify_email: true,
-    })
+      })
     setSchedulingPlan(planId)
   }
 
@@ -253,7 +248,6 @@ export default function StudyPlanner() {
         topic: scheduleForm.topic.trim(),
         start_at: new Date(scheduleForm.start_at).toISOString(),
         end_at: new Date(scheduleForm.end_at).toISOString(),
-        notify_email: scheduleForm.notify_email,
       })
 
       await fetchScheduledSessions()
@@ -264,7 +258,7 @@ export default function StudyPlanner() {
       toast.error(
         typeof detail === 'string'
           ? detail
-          : 'Could not schedule this session. Check your details and email verification.'
+          : 'Could not schedule this session. Please check your details and try again.'
       )
     } finally {
       setScheduleSaving(false)
@@ -652,7 +646,7 @@ export default function StudyPlanner() {
                           ) : (
                             <Check size={16} />
                           )}
-                          {logging === plan.id ? 'Logging...' : 'Log Today’s Session'}
+                          {logging === plan.id ? 'Logging...' : 'Log Todays Session'}
                         </button>
                       </div>
 
@@ -665,7 +659,7 @@ export default function StudyPlanner() {
                               Scheduled Sessions
                             </h4>
                             <p>
-                              Plan a study session and get an email after it ends.
+                              Plan and manage your upcoming study sessions.
                             </p>
                           </div>
 
@@ -747,32 +741,6 @@ export default function StudyPlanner() {
                               </div>
                             </div>
 
-                            <label className="planner-email-option">
-                              <input
-                                type="checkbox"
-                                checked={scheduleForm.notify_email}
-                                onChange={event =>
-                                  setScheduleForm(current => ({
-                                    ...current,
-                                    notify_email: event.target.checked,
-                                  }))
-                                }
-                              />
-                              <span className="planner-email-option-icon">
-                                {scheduleForm.notify_email ? (
-                                  <Bell size={16} />
-                                ) : (
-                                  <BellOff size={16} />
-                                )}
-                              </span>
-                              <span>
-                                <strong>Email me when this session ends</strong>
-                                <small>
-                                  Notification will be sent to your verified account email.
-                                </small>
-                              </span>
-                            </label>
-
                             <div className="planner-schedule-form-actions">
                               <button
                                 type="button"
@@ -819,23 +787,11 @@ export default function StudyPlanner() {
                                   <span>
                                     <Clock size={13} />
                                     {formatManilaDateTime(session.start_at)}
-                                    {' ? '}
+                                    {' \u2013 '}
                                     {formatManilaDateTime(session.end_at)}
-                                    {' ? Asia/Manila'}
+                                    {' (Asia/Manila)'}
                                   </span>
-                                  <span className={`planner-notification-status planner-notification-${session.notification_status}`}>
-                                    <Mail size={13} />
-                                    {session.notification_status === 'sent'
-                                      ? 'Email sent'
-                                      : session.notification_status === 'failed'
-                                        ? 'Email failed'
-                                        : session.notification_status === 'processing'
-                                          ? 'Sending email'
-                                          : session.notification_status === 'disabled'
-                                            ? 'Email notification off'
-                                            : 'Email pending'}
-                                  </span>
-                                </div>
+                                  </div>
 
                                 {session.status === 'scheduled' && (
                                   <button
