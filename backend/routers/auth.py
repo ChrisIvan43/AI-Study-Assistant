@@ -120,7 +120,9 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         )
 
     if (user.role or "student").lower() == "student":
-        user.last_login_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        user.last_login_at = now
+        user.last_activity_at = now
         user.last_1_day_reminder_at = None
         user.last_5_day_reminder_at = None
         db.commit()

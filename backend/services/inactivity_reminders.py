@@ -2,7 +2,7 @@
 StudyCraft inactivity email reminders.
 
 Sends one reminder after one day and another after five days
-without a successful login. Reminder delivery is independent
+without student activity. Reminder delivery is independent
 of email verification status.
 """
 
@@ -58,54 +58,64 @@ def _send_reminder(
             .first()
         )
 
-        if not user or not user.last_login_at:
+        if not user or not user.last_activity_at:
             return "skipped"
 
-        last_login = _as_utc(user.last_login_at)
+        last_activity = _as_utc(user.last_activity_at)
         marker = getattr(user, marker_column.key)
 
         # A marker from an older inactivity period must not block
         # a reminder for the current period.
-        if marker is not None and _as_utc(marker) >= last_login:
+        if marker is not None and _as_utc(marker) >= last_activity:
             return "skipped"
 
-        if now < last_login + timedelta(days=reminder_days):
+        if now < last_activity + timedelta(days=reminder_days):
             return "skipped"
 
         safe_name = html.escape(user.name or "there")
         subject = (
-            "Your StudyCraft study journey is waiting"
+            "Your learning journey is waiting! \U0001F4DA"
             if reminder_days == 1
-            else "It's been 5 days — let's get back to studying"
+            else "We miss having you on StudyCraft! \U0001F499"
         )
 
         if reminder_days == 1:
             body = (
                 f"Hi {user.name or 'there'},\n\n"
-                "It's been a day since your last StudyCraft login. "
-                "A short study session today can help you keep your "
-                "learning momentum going.\n\n"
-                "Log in to StudyCraft and continue where you left off.\n\n"
-                "Keep learning,\nThe StudyCraft Team"
+                "It's been a day since your last visit to StudyCraft!\n\n"
+                "Take a few minutes today to review your lessons, create "
+                "flashcards, or test your knowledge with a quiz. Every small "
+                "step brings you closer to your learning goals!\n\n"
+                "Ready to study again?\n\n"
+                "Visit StudyCraft: https://ai-study-assistant-9tp.pages.dev\n\n"
+                "The StudyCraft Team"
             )
-            heading = "Your learning momentum matters"
+            heading = "Your learning journey is waiting!"
+            closing_prompt = "Ready to study again?"
             message = (
-                "It's been one day since your last StudyCraft login. "
-                "Even a short study session can help you stay on track."
+                "It's been a day since your last visit to StudyCraft! "
+                "Take a few minutes today to review your lessons, create "
+                "flashcards, or test your knowledge with a quiz. Every small "
+                "step brings you closer to your learning goals!"
             )
         else:
             body = (
                 f"Hi {user.name or 'there'},\n\n"
-                "It's been five days since your last StudyCraft login. "
-                "Your study goals are still waiting for you. Come back "
-                "and take one small step toward them today.\n\n"
-                "Log in to StudyCraft to continue learning.\n\n"
-                "We're cheering you on,\nThe StudyCraft Team"
+                "It's been 5 days since your last study session. Don't let "
+                "your progress stop here!\n\n"
+                "Come back to StudyCraft, pick up where you left off, and "
+                "take another step toward your goals. You've got this!\n\n"
+                "Your next learning session starts here:\n\n"
+                "Visit StudyCraft: https://ai-study-assistant-9tp.pages.dev\n\n"
+                "The StudyCraft Team"
             )
-            heading = "Ready to get back on track?"
+            heading = "We miss having you on StudyCraft!"
+            closing_prompt = "Your next learning session starts here:"
             message = (
-                "It's been five days since your last StudyCraft login. "
-                "Your study goals are still waiting for you."
+                "It's been 5 days since your last study session. Don't let "
+                "your progress stop here! Come back to StudyCraft, pick up "
+                "where you left off, and take another step toward your goals. "
+                "You've got this!"
             )
 
         html_body = f"""
@@ -119,16 +129,17 @@ def _send_reminder(
               <h3>{heading}</h3>
               <p>Hi {safe_name},</p>
               <p>{message}</p>
+              <p>{closing_prompt}</p>
               <p>
                 <a href="https://ai-study-assistant-9tp.pages.dev"
                    style="display:inline-block;padding:12px 20px;
                           background:#2457d6;color:#fff;
                           text-decoration:none;border-radius:8px;">
-                  Continue studying
+                  Visit StudyCraft
                 </a>
               </p>
               <p style="color:#64748b;font-size:13px;">
-                Keep learning,<br>The StudyCraft Team
+                The StudyCraft Team
               </p>
             </div>
           </body>
@@ -307,11 +318,11 @@ def process_due_inactivity_reminders(
 
     one_day_due = (
         (User.last_1_day_reminder_at.is_(None))
-        | (User.last_1_day_reminder_at < User.last_login_at)
+        | (User.last_1_day_reminder_at < User.last_activity_at)
     )
     five_day_due = (
         (User.last_5_day_reminder_at.is_(None))
-        | (User.last_5_day_reminder_at < User.last_login_at)
+        | (User.last_5_day_reminder_at < User.last_activity_at)
     )
 
     candidate_ids = [
@@ -320,13 +331,13 @@ def process_due_inactivity_reminders(
             db.query(User.id)
             .filter(
                 func.lower(User.role) == "student",
-                User.last_login_at.isnot(None),
+                User.last_activity_at.isnot(None),
                 or_(
-                    (User.last_login_at <= one_day_cutoff) & one_day_due,
-                    (User.last_login_at <= five_day_cutoff) & five_day_due,
+                    (User.last_activity_at <= one_day_cutoff) & one_day_due,
+                    (User.last_activity_at <= five_day_cutoff) & five_day_due,
                 ),
             )
-            .order_by(User.last_login_at.asc())
+            .order_by(User.last_activity_at.asc())
             .limit(BATCH_SIZE)
             .all()
         )

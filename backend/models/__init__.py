@@ -36,6 +36,7 @@ class User(Base):
 
     # Student inactivity reminder tracking
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)
     last_1_day_reminder_at = Column(DateTime(timezone=True), nullable=True)
     last_5_day_reminder_at = Column(DateTime(timezone=True), nullable=True)
 

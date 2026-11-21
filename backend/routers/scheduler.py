@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services.inactivity_reminders import (
     process_due_inactivity_reminders,
-    process_hourly_inactivity_test_reminder,
 )
 from services.study_session_notifications import (
     process_due_study_session_notifications,
@@ -71,35 +70,6 @@ def run_inactivity_reminders(
     """Process due student inactivity email reminders."""
 
     _verify_scheduler_secret(scheduler_secret)
-
-    hourly_test_mode = (
-        os.getenv("STUDYCRAFT_INACTIVITY_TEST_MODE", "").strip().lower()
-        == "true"
-    )
-
-    if hourly_test_mode:
-        test_email = os.getenv(
-            "STUDYCRAFT_INACTIVITY_TEST_EMAIL", ""
-        ).strip().lower()
-
-        if not test_email:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Hourly test mode requires a configured test email.",
-            )
-
-        result = process_hourly_inactivity_test_reminder(
-            db=db,
-            test_email=test_email,
-        )
-
-        return {
-            "success": True,
-            "message": "Hourly inactivity TEST processing completed.",
-            "test_recipient": test_email,
-            "interval_minutes": 60,
-            "results": result,
-        }
 
     result = process_due_inactivity_reminders(db)
 

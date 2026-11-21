@@ -83,6 +83,11 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Only authenticated student requests count toward study activity.
+    if (user.role or "student").lower() == "student":
+        user.last_activity_at = datetime.now(timezone.utc)
+        db.commit()
+
     return user
 
 
